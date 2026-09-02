@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "run_id": "run-001",
+  "state_sequence": 3,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Improve starter_repo.plot_data.read_csv_data while preserving the existing plotting command-line interface and unrelated behavior.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Add pytest tests under tests/ for valid columns, a missing x column, and a missing y column.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "The new missing-column tests pass.",
+      "Valid input still returns the selected x and y values.",
+      "A missing requested column raises ValueError containing its name."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "write",
+  "next_node": "END",
+  "status": "completed",
+  "outputs": {
+    "plan": {
+      "content": "# Implementation Plan\n\n## Current behavior and relevant files\n\n- `starter_repo/plot_data.py`\n  - `read_csv_data()` loads the CSV with `pandas.read_csv()`.\n  - It directly indexes `df[x_col]` and `df[y_col]`, so a missing requested column currently raises pandas’ `KeyError`.\n  - When both columns exist, it returns their values as two lists.\n  - `main()` defines the existing positional arguments and plotting options; it passes the selected data to `create_plot()` and saves the figure.\n- `tests/test_plot_data.py`\n  - Provides a temporary CSV fixture containing `x` and `y`.\n  - Already verifies successful column selection and unrelated plot construction behavior.\n- `pyproject.toml`, `mypy.ini`, and `.pre-commit-config.yaml`\n  - Configure pytest, Ruff, and mypy validation.\n\n## Recommended implementation changes\n\n1. Update only `read_csv_data()` in `starter_repo/plot_data.py`.\n2. After reading the CSV and before indexing the DataFrame:\n   - Compare both requested names against `df.columns`.\n   - Collect every missing requested column, preserving request order and avoiding duplicate names when `x_col == y_col`.\n3. If any requested columns are absent, raise `ValueError` with a clear message containing every missing name, for example:\n   - `CSV is missing required column(s): missing_x`\n   - `CSV is missing required column(s): missing_x, missing_y`\n4. If neither column is missing, retain the existing `tolist()` return path unchanged.\n5. Do not alter `main()`, its arguments or options, `create_plot()`, output generation, or handling of other CSV errors.\n\n## Test changes\n\nUpdate `tests/test_plot_data.py`:\n\n1. Retain or rename the existing `test_read_csv_data` test so it explicitly covers valid requested columns and confirms the exact returned `x` and `y` lists.\n2. Add a missing-x test:\n   - Call `read_csv_data(sample_csv, \"missing_x\", \"y\")`.\n   - Assert that it raises `ValueError`.\n   - Assert that the exception message contains `missing_x`.\n3. Add a missing-y test:\n   - Call `read_csv_data(sample_csv, \"x\", \"missing_y\")`.\n   - Assert that it raises `ValueError`.\n   - Assert that the exception message contains `missing_y`.\n4. Optionally add a focused both-missing test to protect the requirement that the message identifies missing column “name or names”; assert that both names appear.\n5. Leave the existing `create_plot()` test unchanged to guard unrelated plotting behavior.\n\n## Validation commands\n\n```bash\n.venv/bin/pytest\n.venv/bin/ruff check starter_repo tests\n.venv/bin/ruff format --check starter_repo tests\n.venv/bin/mypy starter_repo tests\n```\n\nAlso rely on the existing CI test matrix to verify pytest under Python 3.11 and 3.12.\n\n## Risks and edge cases\n\n- Validate both names before selecting either column; otherwise one missing column could still leak pandas’ `KeyError`.\n- If both columns are missing, the single `ValueError` should identify both names.\n- If `x_col` and `y_col` are the same missing name, avoid reporting it twice.\n- Column matching should remain exact and case-sensitive, consistent with current pandas behavior.\n- Errors unrelated to requested-column presence—such as a nonexistent file or malformed CSV—should continue propagating unchanged.",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    },
+    "code": {
+      "content": "diff --git a/starter_repo/plot_data.py b/starter_repo/plot_data.py\n--- a/starter_repo/plot_data.py\n+++ b/starter_repo/plot_data.py\n@@ -17,6 +17,13 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],\n         Tuple of x and y data as lists\n     \"\"\"\n     df = pd.read_csv(file_path)\n+    missing_columns: list[str] = []\n+    for column in (x_col, y_col):\n+        if column not in df.columns and column not in missing_columns:\n+            missing_columns.append(column)\n+\n+    if missing_columns:\n+        raise ValueError(f\"CSV is missing required column(s): {', '.join(missing_columns)}\")\n+\n     return df[x_col].tolist(), df[y_col].tolist()\n \n \ndiff --git a/tests/test_plot_data.py b/tests/test_plot_data.py\n--- a/tests/test_plot_data.py\n+++ b/tests/test_plot_data.py\n@@ -20,6 +20,20 @@ def test_read_csv_data(sample_csv: Path) -> None:\n     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]\n \n \n+def test_read_csv_data_missing_x_column(sample_csv: Path) -> None:\n+    \"\"\"Test that a missing x column raises a descriptive ValueError.\"\"\"\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(sample_csv, \"missing_x\", \"y\")\n+    assert \"missing_x\" in str(exc_info.value)\n+\n+\n+def test_read_csv_data_missing_y_column(sample_csv: Path) -> None:\n+    \"\"\"Test that a missing y column raises a descriptive ValueError.\"\"\"\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(sample_csv, \"x\", \"missing_y\")\n+    assert \"missing_y\" in str(exc_info.value)\n+\n+\n def test_create_plot() -> None:\n     \"\"\"Test plot creation.\"\"\"\n     x_data = [1.0, 2.0, 3.0]",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    },
+    "write": {
+      "content": "Implemented the missing-column validation.\n\nChanged:\n\n- [starter_repo/plot_data.py](/Users/abhishekghosh/agentic-engineering/fixture/starter_repo/plot_data.py): raises descriptive `ValueError` for missing requested columns.\n- [tests/test_plot_data.py](/Users/abhishekghosh/agentic-engineering/fixture/tests/test_plot_data.py): added missing-x and missing-y tests.\n\nNo tests or validation commands were run, as requested.",
+      "agent_cli": "codex exec",
+      "sandbox": "workspace-write"
+    }
+  }
+}

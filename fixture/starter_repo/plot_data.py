@@ -19,6 +19,14 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],
         Tuple of x and y data as lists
     """
     df = pd.read_csv(file_path)
+    missing_columns: list[str] = []
+    for column in (x_col, y_col):
+        if column not in df.columns and column not in missing_columns:
+            missing_columns.append(column)
+
+    if missing_columns:
+        raise ValueError(f"CSV is missing required column(s): {', '.join(missing_columns)}")
+
     return df[x_col].tolist(), df[y_col].tolist()
 
 
