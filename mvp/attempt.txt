@@ -1,0 +1,64 @@
+```diff
+diff --git a/starter_repo/plot_data.py b/starter_repo/plot_data.py
+--- a/starter_repo/plot_data.py
++++ b/starter_repo/plot_data.py
+@@ -17,6 +17,13 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],
+         Tuple of x and y data as lists
+     """
+     df = pd.read_csv(file_path)
++
++    missing_columns = list(
++        dict.fromkeys(column for column in (x_col, y_col) if column not in df.columns)
++    )
++    if missing_columns:
++        column_names = ", ".join(repr(column) for column in missing_columns)
++        raise ValueError(f"CSV data is missing required column(s): {column_names}")
++
+     return df[x_col].tolist(), df[y_col].tolist()
+ 
+ 
+diff --git a/tests/test_plot_data.py b/tests/test_plot_data.py
+--- a/tests/test_plot_data.py
++++ b/tests/test_plot_data.py
+@@ -14,7 +14,7 @@ def sample_csv(tmp_path: Path) -> Path:
+     return file_path
+ 
+ 
+-def test_read_csv_data(sample_csv: Path) -> None:
++def test_read_csv_data_with_valid_columns(sample_csv: Path) -> None:
+     """Test reading data from CSV file."""
+     x_data, y_data = read_csv_data(sample_csv, "x", "y")
+     assert x_data == [1.0, 2.0, 3.0, 4.0, 5.0]
+@@ -22,6 +22,18 @@ def test_read_csv_data(sample_csv: Path) -> None:
+     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]
+ 
+ 
++def test_read_csv_data_with_missing_x_column(sample_csv: Path) -> None:
++    """Test that a missing x column produces a clear ValueError."""
++    with pytest.raises(ValueError, match="missing_x"):
++        read_csv_data(sample_csv, "missing_x", "y")
++
++
++def test_read_csv_data_with_missing_y_column(sample_csv: Path) -> None:
++    """Test that a missing y column produces a clear ValueError."""
++    with pytest.raises(ValueError, match="missing_y"):
++        read_csv_data(sample_csv, "x", "missing_y")
++
++
+ def test_create_plot() -> None:
+     """Test plot creation."""
+     x_data = [1.0, 2.0, 3.0]
+```
+
+The implementation checks both requested columns immediately after reading the CSV and raises a clear `ValueError` listing every missing name. The existing successful selection behavior and plotting/CLI code remain unchanged. Duplicate requested names are reported only once.
+
+Verification commands:
+
+```bash
+pytest tests/test_plot_data.py
+pytest
+ruff check starter_repo tests
+mypy starter_repo
+```
+
+No files were changed and no tests were run during this read-only invocation.
