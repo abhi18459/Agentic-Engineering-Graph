@@ -1,4 +1,4 @@
-"""Shared state and Codex helpers for Step 2 nodes."""
+"""Shared state and Codex helpers for graph nodes."""
 
 from __future__ import annotations
 
@@ -16,22 +16,25 @@ class NodeError(RuntimeError):
     """Raised when a node cannot produce a valid next state."""
 
 
-def node_parser(node_name: str, default_prompt: Path) -> argparse.ArgumentParser:
+def node_parser(
+    node_name: str, default_prompt: Path | None = None
+) -> argparse.ArgumentParser:
     """Build the common command-line interface used by every node."""
     parser = argparse.ArgumentParser(description=f"Run the {node_name} node")
     parser.add_argument("--input-state", required=True, type=Path)
     parser.add_argument("--output-state", required=True, type=Path)
-    parser.add_argument(
-        "--prompt-file",
-        type=Path,
-        default=default_prompt,
-        help=f"Prompt template (default: {default_prompt})",
-    )
+    if default_prompt is not None:
+        parser.add_argument(
+            "--prompt-file",
+            type=Path,
+            default=default_prompt,
+            help=f"Prompt template (default: {default_prompt})",
+        )
     return parser
 
 
 def read_state(path: Path, expected_next_node: str) -> dict[str, Any]:
-    """Load and minimally validate a node's input state."""
+    """Load and validate a node's input state."""
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -41,8 +44,8 @@ def read_state(path: Path, expected_next_node: str) -> dict[str, Any]:
 
     if not isinstance(value, dict):
         raise NodeError(f"Input state must contain a JSON object: {path}")
-    if value.get("schema_version") != 1:
-        raise NodeError("Only schema_version 1 is supported")
+    if value.get("schema_version") != 2:
+        raise NodeError("Only schema_version 2 is supported by Step 3 nodes")
     if not isinstance(value.get("run_id"), str) or not value["run_id"].strip():
         raise NodeError("Input state must contain a non-empty run_id")
     if not isinstance(value.get("task"), dict):
@@ -52,11 +55,36 @@ def read_state(path: Path, expected_next_node: str) -> dict[str, Any]:
             f"Input state points to {value.get('next_node')!r}; "
             f"expected {expected_next_node!r}"
         )
+    if value.get("workflow_status") != "running":
+        raise NodeError("Only a running workflow may execute another node")
     if not isinstance(value.get("outputs"), dict):
         raise NodeError("Input state must contain an outputs object")
+
     sequence = value.get("state_sequence")
     if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
-        raise NodeError("Input state must contain a non-negative integer state_sequence")
+        raise NodeError(
+            "Input state must contain a non-negative integer state_sequence"
+        )
+
+    iteration = value.get("iteration")
+    maximum = value.get("max_iterations")
+    if not isinstance(iteration, int) or isinstance(iteration, bool) or iteration < 0:
+        raise NodeError("Input state must contain a non-negative integer iteration")
+    if not isinstance(maximum, int) or isinstance(maximum, bool) or maximum < 1:
+        raise NodeError("Input state must contain a positive integer max_iterations")
+    if iteration > maximum:
+        raise NodeError("iteration cannot exceed max_iterations")
+
+    test_attempts = value.get("test_attempts")
+    fix_attempts = value.get("fix_attempts")
+    if not isinstance(test_attempts, list):
+        raise NodeError("Input state must contain a test_attempts array")
+    if not isinstance(fix_attempts, list):
+        raise NodeError("Input state must contain a fix_attempts array")
+    if len(fix_attempts) != iteration:
+        raise NodeError("iteration must equal the number of recorded fix attempts")
+    if not isinstance(value.get("test_config"), dict):
+        raise NodeError("Input state must contain a test_config object")
     return value
 
 
@@ -141,7 +169,9 @@ def invoke_codex(fixture: Path, prompt: str, sandbox: str) -> str:
         raise NodeError("Codex CLI was not found on PATH") from exc
 
     if result.returncode != 0:
-        details = result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
+        details = (
+            result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
+        )
         raise NodeError(f"Codex invocation failed ({result.returncode}): {details}")
 
     content = result.stdout.strip()
@@ -155,31 +185,38 @@ def advance_state(
     *,
     current_node: str,
     next_node: str,
-    content: str,
-    sandbox: str,
+    output: dict[str, Any],
+    workflow_status: str = "running",
 ) -> dict[str, Any]:
-    """Copy the previous snapshot and add one completed node output."""
+    """Copy the previous snapshot and record one completed node."""
     updated = copy.deepcopy(state)
     updated["state_sequence"] += 1
     updated["current_node"] = current_node
     updated["next_node"] = next_node
     updated["status"] = "completed"
-    updated["outputs"][current_node] = {
-        "content": content,
-        "agent_cli": "codex exec",
-        "sandbox": sandbox,
-    }
+    updated["workflow_status"] = workflow_status
+    updated["outputs"][current_node] = copy.deepcopy(output)
     return updated
 
 
 def write_state(path: Path, state: dict[str, Any], input_path: Path) -> None:
-    """Write a new state snapshot without overwriting an existing one."""
+    """Write a correctly named state snapshot without overwriting a file."""
     input_parent = input_path.resolve().parent
     output_parent = path.resolve().parent
     if output_parent != input_parent:
-        raise NodeError("Input and output state files must be in the same run directory")
+        raise NodeError(
+            "Input and output state files must be in the same run directory"
+        )
     if path.exists():
         raise NodeError(f"Refusing to overwrite existing state: {path}")
+
+    sequence = state.get("state_sequence")
+    current_node = state.get("current_node")
+    if not isinstance(sequence, int) or not isinstance(current_node, str):
+        raise NodeError("Output state lacks its sequence or current node")
+    expected_name = f"{sequence:02d}_{current_node}.json"
+    if path.name != expected_name:
+        raise NodeError(f"Output state must be named {expected_name}, not {path.name}")
 
     try:
         with path.open("x", encoding="utf-8") as handle:

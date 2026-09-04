@@ -40,9 +40,12 @@ def main() -> int:
         updated = advance_state(
             state,
             current_node="write",
-            next_node="END",
-            content=write_result,
-            sandbox="workspace-write",
+            next_node="test",
+            output={
+                "content": write_result,
+                "agent_cli": "codex exec",
+                "sandbox": "workspace-write",
+            },
         )
         write_state(args.output_state, updated, args.input_state)
     except NodeError as exc:

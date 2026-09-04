@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "run_id": "run-002",
+  "state_sequence": 0,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Improve starter_repo.plot_data.read_csv_data while preserving the existing plotting command-line interface and unrelated behavior.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Add pytest tests under tests/ for valid columns, a missing x column, and a missing y column.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "The new missing-column tests pass.",
+      "Valid input still returns the selected x and y values.",
+      "A missing requested column raises ValueError containing its name."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "plan",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {},
+  "test_attempts": [],
+  "fix_attempts": []
+}

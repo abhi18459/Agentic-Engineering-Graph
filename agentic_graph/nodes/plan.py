@@ -33,8 +33,11 @@ def main() -> int:
             state,
             current_node="plan",
             next_node="code",
-            content=plan,
-            sandbox="read-only",
+            output={
+                "content": plan,
+                "agent_cli": "codex exec",
+                "sandbox": "read-only",
+            },
         )
         write_state(args.output_state, updated, args.input_state)
     except NodeError as exc:
