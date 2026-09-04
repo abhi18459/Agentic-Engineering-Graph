@@ -1,0 +1,90 @@
+{
+  "schema_version": 2,
+  "run_id": "run-004",
+  "parent_run_id": "run-003",
+  "scenario": "unrecoverable_external_gate",
+  "fault_injection": {
+    "description": "The test command runs the real fixture test suite and then reports a simulated external approval-gate failure from a harness outside the fix node's writable fixture.",
+    "expected_test_result": "Every test node records exit code 1 and routes to fix while repair budget remains.",
+    "expected_terminal_result": "After three completed fix attempts, the fourth failed test routes to give_up instead of starting another fix."
+  },
+  "state_sequence": 1,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Preserve the accepted missing-column implementation while validating that the graph gives up on a failure controlled outside the fixture.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Do not weaken, delete, skip, or mark tests expected to fail.",
+      "Do not modify files outside the fixture."
+    ],
+    "acceptance_criteria": [
+      "The fixture's real pytest suite continues to pass.",
+      "The external approval gate remains outside the fixture's control.",
+      "The graph stops at give_up after the configured repair limit."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "test",
+  "next_node": "fix",
+  "status": "completed",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "../agentic_graph/scenarios/unavailable_external_gate.py"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "content": "Preserve the accepted fixture implementation and its meaningful tests. Diagnose failures from persisted output, but do not modify external orchestration files or bypass an external quality gate.",
+      "source": "seeded from the accepted Step 3 implementation context"
+    },
+    "code": {
+      "content": "The accepted read_csv_data() implementation validates requested column names before DataFrame indexing, raises a descriptive ValueError containing all missing names, and otherwise returns the requested columns as lists. No fixture code change can alter a gate evaluated by the external run harness.",
+      "source": "seeded from the accepted Step 3 implementation context"
+    },
+    "test": {
+      "result": "failed",
+      "passed": false,
+      "exit_code": 1,
+      "command": [
+        ".venv/bin/python",
+        "../agentic_graph/scenarios/unavailable_external_gate.py"
+      ],
+      "stdout": ".....                                                                    [100%]\n5 passed in 0.26s\nSIMULATED_EXTERNAL_GATE_FAILED: approval service is unavailable; this condition is controlled outside the fixture and cannot be repaired by changing fixture code.\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  },
+  "test_attempts": [
+    {
+      "result": "failed",
+      "passed": false,
+      "exit_code": 1,
+      "command": [
+        ".venv/bin/python",
+        "../agentic_graph/scenarios/unavailable_external_gate.py"
+      ],
+      "stdout": ".....                                                                    [100%]\n5 passed in 0.26s\nSIMULATED_EXTERNAL_GATE_FAILED: approval service is unavailable; this condition is controlled outside the fixture and cannot be repaired by changing fixture code.\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  ],
+  "fix_attempts": []
+}
