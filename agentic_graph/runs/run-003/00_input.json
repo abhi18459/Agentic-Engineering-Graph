@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "run_id": "run-003",
+  "parent_run_id": "run-002",
+  "scenario": "recoverable_failure",
+  "fault_injection": {
+    "description": "The explicit missing-column validation was removed from starter_repo/plot_data.py so pandas raises KeyError instead of the required ValueError.",
+    "expected_initial_result": "The first test node records pytest exit code 1 and routes to fix.",
+    "expected_recovery": "The fix node restores correct validation in the current fixture, and the next test routes to END."
+  },
+  "state_sequence": 0,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Improve starter_repo.plot_data.read_csv_data while preserving the existing plotting command-line interface and unrelated behavior.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Add pytest tests under tests/ for valid columns, a missing x column, and a missing y column.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "The new missing-column tests pass.",
+      "Valid input still returns the selected x and y values.",
+      "A missing requested column raises ValueError containing its name."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "test",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "content": "Validate both requested column names immediately after reading the CSV and before DataFrame indexing. Collect missing names in request order without duplicates, raise a descriptive ValueError containing every missing name, preserve the successful return path, and leave plotting and CLI behavior unchanged.",
+      "source": "seeded from the accepted run-002 implementation context"
+    },
+    "code": {
+      "content": "The accepted implementation added an ordered missing_columns list in read_csv_data(), populated it from (x_col, y_col) when names were absent from df.columns, raised ValueError with the joined missing names when the list was non-empty, and otherwise returned df[x_col].tolist(), df[y_col].tolist(). The run-003 fault injection removed that validation block from the current fixture.",
+      "source": "seeded from the accepted run-002 implementation context"
+    }
+  },
+  "test_attempts": [],
+  "fix_attempts": []
+}

@@ -180,6 +180,36 @@ directory; it does not create `run-003` automatically.
 The dispatcher refuses to overwrite snapshots. Step 4 will add manifest-backed
 resume behavior for interrupted runs.
 
+## Prepared recoverable-failure scenario
+
+`runs/run-003/00_input.json` is a fault-injection run for the required Step 3
+failure-path demonstration. It starts at `test` and carries concise plan and code
+context from the accepted implementation so that `fix` has the state required by
+its contract.
+
+The corresponding setup deliberately removes missing-column validation from
+`fixture/starter_repo/plot_data.py` while retaining the tests that require a
+descriptive `ValueError`. Its expected route is:
+
+```text
+00_input.json
+  -> 01_test.json  (pytest exit 1)
+  -> 02_fix.json   (repairs the current fixture in place)
+  -> 03_test.json  (pytest exit 0)
+  -> END
+```
+
+Run it from the workspace root with:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-003 \
+  --start test
+```
+
+The exact number of fix/test cycles can be greater than one if the first repair
+is incomplete, but it cannot exceed the configured three-fix limit.
+
 ## Exit codes
 
 - `0`: workflow reached `END` and tests passed.

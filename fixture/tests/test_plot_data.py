@@ -24,16 +24,23 @@ def test_read_csv_data(sample_csv: Path) -> None:
 
 def test_read_csv_data_missing_x_column(sample_csv: Path) -> None:
     """Test that a missing x column raises a descriptive ValueError."""
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValueError, match="missing_x"):
         read_csv_data(sample_csv, "missing_x", "y")
-    assert "missing_x" in str(exc_info.value)
 
 
 def test_read_csv_data_missing_y_column(sample_csv: Path) -> None:
     """Test that a missing y column raises a descriptive ValueError."""
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValueError, match="missing_y"):
         read_csv_data(sample_csv, "x", "missing_y")
-    assert "missing_y" in str(exc_info.value)
+
+
+def test_read_csv_data_missing_both_columns(sample_csv: Path) -> None:
+    """Test that both missing requested columns are identified."""
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(sample_csv, "missing_x", "missing_y")
+    message = str(exc_info.value)
+    assert "missing_x" in message
+    assert "missing_y" in message
 
 
 def test_create_plot() -> None:
