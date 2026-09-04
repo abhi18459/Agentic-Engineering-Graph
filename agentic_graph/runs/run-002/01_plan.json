@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "run_id": "run-002",
+  "state_sequence": 1,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Improve starter_repo.plot_data.read_csv_data while preserving the existing plotting command-line interface and unrelated behavior.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Add pytest tests under tests/ for valid columns, a missing x column, and a missing y column.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "The new missing-column tests pass.",
+      "Valid input still returns the selected x and y values.",
+      "A missing requested column raises ValueError containing its name."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "plan",
+  "next_node": "code",
+  "status": "completed",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "content": "# Implementation Plan\n\n## 1. Relevant current behavior and files\n\n- [`starter_repo/plot_data.py`](/Users/abhishekghosh/agentic-engineering/fixture/starter_repo/plot_data.py:10) contains `read_csv_data()`, which reads a CSV with pandas and returns the requested columns as lists.\n- The function currently checks requested column names before indexing the DataFrame, collects missing names in `x_col`, `y_col` order, and raises `ValueError` when any are absent.\n- [`starter_repo/plot_data.py`](/Users/abhishekghosh/agentic-engineering/fixture/starter_repo/plot_data.py:56) defines the plotting CLI. It delegates CSV loading to `read_csv_data()` and should otherwise remain unchanged.\n- [`tests/test_plot_data.py`](/Users/abhishekghosh/agentic-engineering/fixture/tests/test_plot_data.py:9) provides a temporary two-column CSV fixture and covers valid selection, missing x, missing y, and plot construction.\n\n## 2. Recommended implementation changes\n\n- Keep the missing-column validation immediately after `pd.read_csv()` and before `df[x_col]` or `df[y_col]` access.\n- Build an ordered, deduplicated collection of absent requested columns so:\n  - A missing x column is named in the error.\n  - A missing y column is named in the error.\n  - If both differ and are missing, both names appear.\n  - If `x_col == y_col` and that column is missing, its name appears only once.\n- Raise `ValueError` with a stable descriptive message such as `CSV is missing required column(s): missing_x, missing_y`.\n- Leave the successful return expression, `create_plot()`, argument definitions, output defaults, plot labels/title, saving, and figure cleanup unchanged.\n- No further production-code delta is indicated by the inspected snapshot; the existing validation structure is the intended implementation.\n\n## 3. Tests to add or update\n\nIn [`tests/test_plot_data.py`](/Users/abhishekghosh/agentic-engineering/fixture/tests/test_plot_data.py:18):\n\n- Retain the valid-column test asserting the exact x and y lists.\n- Retain or tighten the missing-x test to use `pytest.raises(ValueError, match=\"missing_x\")`.\n- Retain or tighten the missing-y test to use `pytest.raises(ValueError, match=\"missing_y\")`.\n- Add a focused both-columns-missing test to verify that both requested names occur in the `ValueError` message; this protects the plural-name requirement.\n- Keep the existing `create_plot()` test unchanged as regression coverage for unrelated plotting behavior.\n- Avoid CLI snapshot or behavior changes because the task does not alter command-line arguments or plotting output.\n\n## 4. Validation commands\n\n```bash\npytest tests/test_plot_data.py\npytest\nruff check .\nmypy starter_repo\n```\n\nOptionally verify the unchanged CLI surface without producing a plot:\n\n```bash\npython -m starter_repo.plot_data --help\n```\n\n## 5. Risks and edge cases\n\n- Validate both names before indexing; checking only the first access could expose a pandas `KeyError` for the second column.\n- Preserve requested-column order in the message for deterministic tests.\n- Deduplicate names when x and y refer to the same missing column.\n- Match column names exactly, preserving pandas behavior for case, whitespace, and non-normalized CSV headers.\n- Continue propagating unrelated pandas errors—such as missing files or malformed CSV input—without converting them to `ValueError`.\n- Do not catch the new `ValueError` in `main()`, since doing so could unintentionally change CLI error handling.",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    }
+  },
+  "test_attempts": [],
+  "fix_attempts": []
+}
