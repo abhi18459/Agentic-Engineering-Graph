@@ -210,6 +210,42 @@ python3 agentic_graph/dispatcher.py \
 The exact number of fix/test cycles can be greater than one if the first repair
 is incomplete, but it cannot exceed the configured three-fix limit.
 
+## Prepared unrecoverable-failure scenario
+
+`runs/run-004/00_input.json` supplies the final Step 3 validation. Its configured
+test command invokes `scenarios/unavailable_external_gate.py`, which first runs
+the fixture's real pytest suite and then returns exit code `1` for a simulated
+external approval service that is unavailable.
+
+The harness lives outside the fixture and the fix node is explicitly prohibited
+from modifying external files or weakening tests. Consequently, fixture edits
+cannot make the injected gate pass. With `max_iterations` set to three, the
+expected route is:
+
+```text
+00_input.json
+  -> 01_test.json  (external gate fails)
+  -> 02_fix.json   (attempt 1)
+  -> 03_test.json  (external gate still fails)
+  -> 04_fix.json   (attempt 2)
+  -> 05_test.json  (external gate still fails)
+  -> 06_fix.json   (attempt 3)
+  -> 07_test.json  (external gate still fails)
+  -> give_up
+```
+
+Run it from the workspace root with:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-004 \
+  --start test
+```
+
+The dispatcher returns exit code `2` when this expected `give_up` terminal is
+reached. That nonzero exit is the success condition for this fault-injection
+scenario, not an orchestration defect.
+
 ## Exit codes
 
 - `0`: workflow reached `END` and tests passed.
