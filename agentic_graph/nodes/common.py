@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -200,7 +202,7 @@ def advance_state(
 
 
 def write_state(path: Path, state: dict[str, Any], input_path: Path) -> None:
-    """Write a correctly named state snapshot without overwriting a file."""
+    """Atomically publish a correctly named state without overwriting it."""
     input_parent = input_path.resolve().parent
     output_parent = path.resolve().parent
     if output_parent != input_parent:
@@ -218,9 +220,46 @@ def write_state(path: Path, state: dict[str, Any], input_path: Path) -> None:
     if path.name != expected_name:
         raise NodeError(f"Output state must be named {expected_name}, not {path.name}")
 
+    temporary_path: Path | None = None
     try:
-        with path.open("x", encoding="utf-8") as handle:
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=output_parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            text=True,
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(state, handle, indent=2, ensure_ascii=False)
             handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        # A same-directory hard link publishes the already-flushed inode in one
+        # operation and fails rather than overwriting an existing snapshot.
+        try:
+            os.link(temporary_path, path)
+        except FileExistsError as exc:
+            raise NodeError(f"Refusing to overwrite existing state: {path}") from exc
+        temporary_path.unlink()
+        temporary_path = None
+
+        try:
+            directory_fd = os.open(output_parent, os.O_RDONLY)
+        except OSError:
+            directory_fd = None
+        if directory_fd is not None:
+            try:
+                os.fsync(directory_fd)
+            except OSError:
+                pass
+            finally:
+                os.close(directory_fd)
     except OSError as exc:
         raise NodeError(f"Could not write state file {path}: {exc}") from exc
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass

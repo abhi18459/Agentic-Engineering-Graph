@@ -26,6 +26,10 @@ ENV/
 # Local analysis output
 .scannerwork/
 
+# Ephemeral agent-graph dispatcher files
+/agentic_graph/runs/*/.dispatcher.lock
+/agentic_graph/runs/*/.*.tmp
+
 # Local secrets
 .env
 .env.*
