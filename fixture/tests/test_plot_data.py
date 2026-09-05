@@ -43,6 +43,15 @@ def test_read_csv_data_missing_both_columns(sample_csv: Path) -> None:
     assert "missing_y" in message
 
 
+def test_read_csv_data_same_missing_column_for_both_axes(sample_csv: Path) -> None:
+    """Test that a shared missing column is identified without duplication."""
+    missing_column = "absent"
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(sample_csv, missing_column, missing_column)
+    message = str(exc_info.value)
+    assert message.count(missing_column) == 1
+
+
 def test_create_plot() -> None:
     """Test plot creation."""
     x_data = [1.0, 2.0, 3.0]

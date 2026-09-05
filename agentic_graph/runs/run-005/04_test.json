@@ -1,0 +1,98 @@
+{
+  "schema_version": 2,
+  "run_id": "run-005",
+  "parent_run_id": "run-004",
+  "scenario": "dispatcher_crash_recovery",
+  "state_sequence": 4,
+  "task": {
+    "title": "Raise ValueError for missing CSV columns",
+    "description": "Preserve and independently verify the accepted missing-column implementation while demonstrating manifest-backed dispatcher recovery.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist.",
+      "If x_col or y_col is missing from the CSV data, raise ValueError instead of allowing pandas to raise KeyError.",
+      "The ValueError message must identify the missing column name or names.",
+      "Preserve meaningful pytest coverage for valid columns and missing requested columns.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "Valid input still returns the selected x and y values.",
+      "A missing requested column raises ValueError containing its name."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "test",
+  "next_node": "END",
+  "status": "completed",
+  "workflow_status": "succeeded",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "content": "# Implementation Plan\n\n## Current behavior and relevant files\n\n- `starter_repo/plot_data.py`\n  - `read_csv_data()` reads the CSV with pandas.\n  - It already checks `x_col` and `y_col` against `df.columns`, collects missing names in request order without duplicates, and raises `ValueError(\"CSV is missing required column(s): ...\")` before pandas indexing can raise `KeyError`.\n  - When both columns exist, it returns their values as lists.\n  - `create_plot()` and `main()` contain the plotting and CLI behavior and are unrelated to this change.\n- `tests/test_plot_data.py`\n  - Covers successful extraction, missing x, missing y, both columns missing, and plotting behavior.\n- `pyproject.toml`, `mypy.ini`, and `.pre-commit-config.yaml`\n  - Define pytest, Ruff, formatting, and mypy validation.\n\n## Recommended changes\n\n1. Preserve the existing missing-column validation in `read_csv_data()` unchanged:\n   - Read the CSV first.\n   - Check both requested column names before selecting either series.\n   - Raise `ValueError` listing every missing requested name.\n   - Retain deduplication when `x_col` and `y_col` are the same missing name.\n2. Preserve the successful path exactly: return `df[x_col].tolist(), df[y_col].tolist()` when both columns exist.\n3. Do not modify `main()`, its arguments, output defaults, `create_plot()`, CSV parsing behavior, or unrelated dispatcher/manifest files.\n\n## Tests\n\nIn `tests/test_plot_data.py`, retain the existing coverage:\n\n- `test_read_csv_data` verifies exact x and y values for valid columns.\n- `test_read_csv_data_missing_x_column` verifies `ValueError` and the missing x name.\n- `test_read_csv_data_missing_y_column` verifies `ValueError` and the missing y name.\n- `test_read_csv_data_missing_both_columns` verifies that both missing names appear in one `ValueError`.\n- `test_create_plot` protects unrelated plotting behavior.\n\nNo additional test changes are required for the stated acceptance criteria. If strengthening edge-case coverage is desired, add a test requesting the same absent name for both axes and assert that the resulting `ValueError` identifies it without duplicating it.\n\n## Validation commands\n\n```bash\npytest tests/test_plot_data.py -q\npytest -q\nruff check starter_repo tests\nruff format --check starter_repo tests\nmypy starter_repo tests\n```\n\nAlternatively, run the repository’s configured combined checks:\n\n```bash\npre-commit run --all-files\n```\n\n## Risks and edge cases\n\n- Column matching should remain exact and case-sensitive, consistent with pandas; do not trim or normalize names.\n- Validate both names before indexing so one missing column cannot leak a pandas `KeyError`.\n- Preserve x-then-y ordering in the error message and avoid duplicate names when both arguments reference the same missing column.\n- Do not translate unrelated failures—such as unreadable files or malformed CSV input—into this `ValueError`.\n- Avoid CLI-level changes to error handling, since the task only changes the exception produced by `read_csv_data()`.",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    },
+    "code": {
+      "content": "diff --git a/tests/test_plot_data.py b/tests/test_plot_data.py\n--- a/tests/test_plot_data.py\n+++ b/tests/test_plot_data.py\n@@ -45,6 +45,15 @@ def test_read_csv_data_missing_both_columns(sample_csv: Path) -> None:\n     assert \"missing_y\" in message\n \n \n+def test_read_csv_data_same_missing_column_for_both_axes(sample_csv: Path) -> None:\n+    \"\"\"Test that a shared missing column is identified without duplication.\"\"\"\n+    missing_column = \"absent\"\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(sample_csv, missing_column, missing_column)\n+    message = str(exc_info.value)\n+    assert message.count(missing_column) == 1\n+\n+\n def test_create_plot() -> None:\n     \"\"\"Test plot creation.\"\"\"\n     x_data = [1.0, 2.0, 3.0]",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    },
+    "write": {
+      "content": "Updated [tests/test_plot_data.py](/Users/abhishekghosh/agentic-engineering/fixture/tests/test_plot_data.py) with coverage ensuring a shared missing x/y column is reported once.\n\nThe existing implementation in `starter_repo/plot_data.py` already satisfies the required behavior, so it was unchanged. Per instruction, no tests or analysis tools were run.",
+      "agent_cli": "codex exec",
+      "sandbox": "workspace-write"
+    },
+    "test": {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "stdout": "......                                                                   [100%]\n6 passed in 0.43s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  },
+  "test_attempts": [
+    {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "stdout": "......                                                                   [100%]\n6 passed in 0.43s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  ],
+  "fix_attempts": []
+}
