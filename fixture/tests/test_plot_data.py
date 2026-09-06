@@ -31,6 +31,24 @@ def test_read_csv_data(sample_csv: Path) -> None:
     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]
 
 
+def test_read_csv_data_with_no_data_rows(tmp_path: Path) -> None:
+    """Test that a header-only CSV raises a descriptive ValueError."""
+    file_path = tmp_path / "header_only.csv"
+    file_path.write_text("x,y\n")
+
+    with pytest.raises(ValueError, match="^CSV contains no data rows$"):
+        read_csv_data(file_path, "x", "y")
+
+
+def test_missing_column_error_precedes_empty_data_validation(tmp_path: Path) -> None:
+    """Test that missing-column validation precedes the no-data-rows check."""
+    file_path = tmp_path / "header_only_missing_column.csv"
+    file_path.write_text("x\n")
+
+    with pytest.raises(ValueError, match=r"^CSV is missing required column\(s\): missing_y$"):
+        read_csv_data(file_path, "x", "missing_y")
+
+
 def test_read_csv_data_with_one_non_numeric_column(non_numeric_csv: Path) -> None:
     """Test that one non-numeric selected column is identified once."""
     with pytest.raises(ValueError) as exc_info:

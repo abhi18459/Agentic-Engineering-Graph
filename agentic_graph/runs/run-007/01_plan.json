@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "run_id": "run-007",
+  "parent_run_id": "run-006",
+  "scenario": "edited_plan_approval_validation",
+  "state_sequence": 1,
+  "task": {
+    "title": "Raise ValueError when a CSV has no data rows",
+    "description": "Reject a header-only CSV with a descriptive error while preserving existing missing-column and numeric-column validation.",
+    "requirements": [
+      "If all requested columns exist but the CSV contains no data rows, raise ValueError before numeric-type validation.",
+      "The ValueError message must clearly state that the CSV contains no data rows.",
+      "Keep missing-column validation first so an absent requested column still produces the existing missing-column error.",
+      "Preserve the existing behavior for populated numeric and non-numeric selected columns.",
+      "Add meaningful pytest coverage for a header-only CSV and for missing-column precedence on an empty CSV.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "A header-only CSV containing both requested columns raises ValueError mentioning that it has no data rows.",
+      "A header-only CSV missing a requested column still raises the existing missing-column ValueError.",
+      "Populated numeric columns continue to return their values unchanged."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "plan",
+  "next_node": "approval",
+  "status": "completed",
+  "workflow_status": "awaiting_approval",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "content": "# Implementation plan\n\n1. Update `starter_repo/plot_data.py`\n   - In `read_csv_data`, retain the current `pd.read_csv` call and missing-column validation unchanged.\n   - Immediately after the missing-column check and before `is_numeric_dtype` validation, check whether the DataFrame has zero rows.\n   - Raise `ValueError(\"CSV contains no data rows\")` when it does.\n   - Leave numeric validation, returned list values, CLI argument handling, and plotting logic unchanged.\n\n2. Update `tests/test_plot_data.py`\n   - Add a header-only CSV fixture or create files within the individual tests using `tmp_path`.\n   - Add a test where the header contains both requested columns (for example, `x,y`) and assert that `read_csv_data` raises `ValueError` with the exact or clearly matching message `CSV contains no data rows`.\n   - Add a precedence test using a header-only CSV missing one requested column and assert that the existing exact error remains, such as `CSV is missing required column(s): missing_y`.\n   - Retain the existing populated numeric test, which already verifies values are returned unchanged.\n   - Retain the existing non-numeric and missing-column tests to guard the established validation behavior and ordering.\n\n3. Validation commands\n\n   ```bash\n   pytest tests/test_plot_data.py\n   pytest\n   ruff check .\n   ruff format --check .\n   mypy starter_repo tests\n   ```\n\n4. Risks and edge cases\n   - The empty-row check must follow missing-column validation; placing it earlier would violate the required error precedence.\n   - It must precede numeric-type validation because pandas generally assigns ambiguous/non-numeric dtypes to header-only columns, which currently causes the misleading numeric-column error.\n   - Define “no data rows” strictly as zero parsed rows. Do not reject populated rows merely because their values are blank or `NaN`.\n   - A completely blank file may still raise pandas’ existing `EmptyDataError`; this task specifically targets parseable, header-only CSV files.\n   - When both axes reference the same existing column, a header-only CSV should still produce the no-data-rows error rather than numeric validation.",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    }
+  },
+  "test_attempts": [],
+  "fix_attempts": []
+}

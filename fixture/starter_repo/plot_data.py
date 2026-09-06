@@ -28,6 +28,9 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],
     if missing_columns:
         raise ValueError(f"CSV is missing required column(s): {', '.join(missing_columns)}")
 
+    if df.empty:
+        raise ValueError("CSV contains no data rows")
+
     non_numeric_columns: list[str] = []
     for column in (x_col, y_col):
         if not is_numeric_dtype(df[column]) and column not in non_numeric_columns:
