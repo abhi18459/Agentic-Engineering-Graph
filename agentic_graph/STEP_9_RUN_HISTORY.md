@@ -110,9 +110,28 @@ python3 -m unittest discover -s agentic_graph/tests -v
 
 ## Manual acceptance check
 
-Use a fresh run directory for the final validation; never reuse a completed run.
-Run the graph through at least one real `test -> fix -> test` cycle, render its
-timeline, and verify:
+The prepared `run-012` starts at `test` with direct plotting deliberately
+validating only `x_data` for non-finite values. Existing `y_data` tests therefore
+fail and route to `fix`, which has seeded approved context describing the narrow
+repair. Commit that pre-run state, make the SonarQube MCP environment available,
+and run:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-012 \
+  --start test
+```
+
+The expected path is `test -> fix -> test -> review -> END`. After it completes,
+persist the timeline:
+
+```bash
+python3 agentic_graph/render_timeline.py \
+  --run-dir agentic_graph/runs/run-012 \
+  --output agentic_graph/runs/run-012/timeline.md
+```
+
+Verify:
 
 - All attempts appear in `attempt_id` order.
 - Repeated node names appear as separate rows.

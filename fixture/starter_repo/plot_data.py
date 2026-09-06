@@ -87,7 +87,7 @@ def create_plot(
         raise ValueError("x_data and y_data must have the same length")
 
     _validate_finite_values(
-        (("x_data", x_data), ("y_data", y_data)),
+        (("x_data", x_data),),
         "Plot axis data contains non-finite values",
     )
 

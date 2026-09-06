@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "run_id": "run-012",
+  "parent_run_id": "run-011",
+  "scenario": "step9_timed_test_fix_review_loop",
+  "fault_injection": {
+    "description": "Direct plotting deliberately validates finite values only on x_data, while the existing regression suite requires validation of both axes.",
+    "expected_result": "The initial test fails, fix restores y_data validation, tests pass, MCP-backed review passes, and the timeline contains native duration_seconds values."
+  },
+  "state_sequence": 0,
+  "task": {
+    "title": "Restore finite-value validation for both plot axes",
+    "description": "Repair create_plot so it rejects NaN and infinite values in either x_data or y_data before plotting.",
+    "requirements": [
+      "Validate both x_data and y_data for NaN, positive infinity, and negative infinity.",
+      "Report each affected axis exactly once and preserve axis order in the ValueError message.",
+      "Preserve length validation, CSV validation, successful plotting behavior, and the public API.",
+      "Keep the existing focused regression tests intact; do not weaken or remove them.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or add suppressions."
+    ],
+    "acceptance_criteria": [
+      "The initial pytest execution fails on existing y_data non-finite-value coverage.",
+      "At least one fix node repairs the implementation without changing the tests.",
+      "The subsequent complete pytest suite passes.",
+      "The MCP-backed SonarQube review passes with successful project-scoped tool calls.",
+      "The manifest records non-negative duration_seconds for every completed node attempt.",
+      "The rendered timeline preserves the complete test, fix, test, and review order."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "test",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "parallel_config": {},
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "--cov=starter_repo",
+      "--cov-report=term-missing",
+      "--cov-report=xml:coverage.xml"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "backend": "sonarqube_mcp",
+    "command": [
+      "sonar-scanner"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "mcp_process_timeout_seconds": 300,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    }
+  },
+  "outputs": {
+    "approval": {
+      "content": "Restore create_plot's direct finite-value validation so it checks both x_data and y_data, reports every affected axis once in axis order, and preserves all existing behavior. Keep the tests and SonarQube configuration unchanged."
+    },
+    "code": {
+      "content": "The regression is in create_plot's _validate_finite_values input: it currently supplies only the x_data named values. Restore the y_data named values in the same validation call so the shared helper checks both axes and retains its existing deduplication and message behavior."
+    }
+  },
+  "test_attempts": [],
+  "review_attempts": [],
+  "fix_attempts": []
+}
