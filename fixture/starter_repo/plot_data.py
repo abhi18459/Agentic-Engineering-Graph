@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 
 import argparse
+import math
+from collections.abc import Iterable
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
+
+
+def _validate_finite_values(
+    named_values: tuple[tuple[str, Iterable[float]], ...], error_message: str
+) -> None:
+    """Reject non-finite numeric values and report each affected name once."""
+    affected_names: list[str] = []
+    checked_names: set[str] = set()
+
+    for name, values in named_values:
+        if name in checked_names:
+            continue
+        checked_names.add(name)
+        if any(not math.isfinite(value) for value in values):
+            affected_names.append(name)
+
+    if affected_names:
+        raise ValueError(f"{error_message}: {', '.join(affected_names)}")
 
 
 def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float], list[float]]:
@@ -39,7 +59,13 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],
     if non_numeric_columns:
         raise ValueError(f"CSV column(s) must be numeric: {', '.join(non_numeric_columns)}")
 
-    return df[x_col].tolist(), df[y_col].tolist()
+    x_data = df[x_col].tolist()
+    y_data = df[y_col].tolist()
+    _validate_finite_values(
+        ((x_col, x_data), (y_col, y_data)),
+        "CSV column(s) contain non-finite values",
+    )
+    return x_data, y_data
 
 
 def create_plot(
@@ -59,6 +85,11 @@ def create_plot(
     """
     if len(x_data) != len(y_data):
         raise ValueError("x_data and y_data must have the same length")
+
+    _validate_finite_values(
+        (("x_data", x_data), ("y_data", y_data)),
+        "Plot axis data contains non-finite values",
+    )
 
     fig, ax = plt.subplots()
     ax.plot(x_data, y_data)

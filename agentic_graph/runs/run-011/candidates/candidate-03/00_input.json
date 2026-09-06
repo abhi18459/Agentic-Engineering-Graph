@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "run_id": "run-011--candidate-03",
+  "parent_run_id": "run-011",
+  "scenario": "parallel_candidates_with_constrained_failure",
+  "fault_injection": {
+    "candidate_id": "candidate-03",
+    "description": "Candidate 3 runs the real pytest suite followed by the existing persistent external-gate failure and has one fix attempt. Its source work cannot satisfy that external condition, so join must exclude it.",
+    "expected_result": "candidate-03 reaches give_up; join selects an eligible candidate-01 or candidate-02."
+  },
+  "state_sequence": 0,
+  "task": {
+    "title": "Reject non-finite plot data",
+    "description": "Strengthen CSV and direct plotting validation so NaN and infinite numeric values are rejected before plotting.",
+    "requirements": [
+      "Reject NaN, positive infinity, and negative infinity in either selected CSV column.",
+      "Reject the same non-finite values when create_plot is called directly.",
+      "Raise descriptive ValueError messages that identify each affected axis or column once.",
+      "Add focused pytest coverage for CSV and direct create_plot non-finite inputs.",
+      "Preserve existing missing-column, empty-data, numeric-type, length, CLI, and successful plotting behavior.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or tests merely to suppress a finding."
+    ],
+    "acceptance_criteria": [
+      "At least one unconstrained candidate passes the complete pytest suite.",
+      "At least one unconstrained candidate passes the MCP-backed SonarQube quality gate.",
+      "The constrained candidate is excluded from winner selection.",
+      "The join node selects by fewest Sonar findings, then fewest fixes, then candidate ID.",
+      "Only the selected candidate's managed fixture files are promoted."
+    ]
+  },
+  "fixture_path": "workspace",
+  "current_node": "input",
+  "next_node": "code",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 1,
+  "test_config": {
+    "command": [
+      "/Users/abhishekghosh/agentic-engineering/fixture/.venv/bin/python",
+      "/Users/abhishekghosh/agentic-engineering/fixture/../agentic_graph/scenarios/unavailable_external_gate.py"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "backend": "sonarqube_mcp",
+    "command": [
+      "sonar-scanner",
+      "-Dsonar.scm.exclusions.disabled=true"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "mcp_process_timeout_seconds": 300,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    },
+    "serialization_lock": "../.sonar-review.lock"
+  },
+  "outputs": {
+    "approval": {
+      "content": "Validate selected CSV values and direct create_plot inputs with a small shared helper that rejects NaN and both infinities before plotting. Report affected columns or axes without duplicate names, add focused regression tests, and preserve every existing validation and public interface. Do not weaken tests or SonarQube configuration."
+    }
+  },
+  "test_attempts": [],
+  "review_attempts": [],
+  "fix_attempts": [],
+  "candidate_id": "candidate-03",
+  "candidate_constraint": "Run the real tests but remain subject to a persistent external validation failure outside the candidate workspace."
+}

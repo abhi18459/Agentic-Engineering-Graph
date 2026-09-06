@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "run_id": "run-011--candidate-03",
+  "parent_run_id": "run-011",
+  "scenario": "parallel_candidates_with_constrained_failure",
+  "fault_injection": {
+    "candidate_id": "candidate-03",
+    "description": "Candidate 3 runs the real pytest suite followed by the existing persistent external-gate failure and has one fix attempt. Its source work cannot satisfy that external condition, so join must exclude it.",
+    "expected_result": "candidate-03 reaches give_up; join selects an eligible candidate-01 or candidate-02."
+  },
+  "state_sequence": 1,
+  "task": {
+    "title": "Reject non-finite plot data",
+    "description": "Strengthen CSV and direct plotting validation so NaN and infinite numeric values are rejected before plotting.",
+    "requirements": [
+      "Reject NaN, positive infinity, and negative infinity in either selected CSV column.",
+      "Reject the same non-finite values when create_plot is called directly.",
+      "Raise descriptive ValueError messages that identify each affected axis or column once.",
+      "Add focused pytest coverage for CSV and direct create_plot non-finite inputs.",
+      "Preserve existing missing-column, empty-data, numeric-type, length, CLI, and successful plotting behavior.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or tests merely to suppress a finding."
+    ],
+    "acceptance_criteria": [
+      "At least one unconstrained candidate passes the complete pytest suite.",
+      "At least one unconstrained candidate passes the MCP-backed SonarQube quality gate.",
+      "The constrained candidate is excluded from winner selection.",
+      "The join node selects by fewest Sonar findings, then fewest fixes, then candidate ID.",
+      "Only the selected candidate's managed fixture files are promoted."
+    ]
+  },
+  "fixture_path": "workspace",
+  "current_node": "code",
+  "next_node": "write",
+  "status": "completed",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 1,
+  "test_config": {
+    "command": [
+      "/Users/abhishekghosh/agentic-engineering/fixture/.venv/bin/python",
+      "/Users/abhishekghosh/agentic-engineering/fixture/../agentic_graph/scenarios/unavailable_external_gate.py"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "backend": "sonarqube_mcp",
+    "command": [
+      "sonar-scanner",
+      "-Dsonar.scm.exclusions.disabled=true"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "mcp_process_timeout_seconds": 300,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    },
+    "serialization_lock": "../.sonar-review.lock"
+  },
+  "outputs": {
+    "approval": {
+      "content": "Validate selected CSV values and direct create_plot inputs with a small shared helper that rejects NaN and both infinities before plotting. Report affected columns or axes without duplicate names, add focused regression tests, and preserve every existing validation and public interface. Do not weaken tests or SonarQube configuration."
+    },
+    "code": {
+      "content": "diff --git a/starter_repo/plot_data.py b/starter_repo/plot_data.py\n--- a/starter_repo/plot_data.py\n+++ b/starter_repo/plot_data.py\n@@ -1,11 +1,26 @@\n #!/usr/bin/env python3\n \n import argparse\n+from collections.abc import Iterable\n+from math import isfinite\n from pathlib import Path\n \n import matplotlib.pyplot as plt\n import pandas as pd\n from pandas.api.types import is_numeric_dtype\n \n \n+def _validate_finite_values(\n+    named_values: Iterable[tuple[str, Iterable[float]]], error_prefix: str\n+) -> None:\n+    \"\"\"Reject non-finite values and report each affected name once.\"\"\"\n+    affected_names: list[str] = []\n+    for name, values in named_values:\n+        if name not in affected_names and any(not isfinite(value) for value in values):\n+            affected_names.append(name)\n+\n+    if affected_names:\n+        raise ValueError(f\"{error_prefix}: {', '.join(affected_names)}\")\n+\n+\n def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float], list[float]]:\n@@ -37,9 +52,13 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],\n \n     if non_numeric_columns:\n         raise ValueError(f\"CSV column(s) must be numeric: {', '.join(non_numeric_columns)}\")\n \n+    _validate_finite_values(\n+        ((x_col, df[x_col]), (y_col, df[y_col])),\n+        \"CSV column(s) contain non-finite values\",\n+    )\n+\n     return df[x_col].tolist(), df[y_col].tolist()\n \n \n def create_plot(\n@@ -58,7 +77,11 @@ def create_plot(\n         matplotlib Figure object\n     \"\"\"\n     if len(x_data) != len(y_data):\n         raise ValueError(\"x_data and y_data must have the same length\")\n \n+    _validate_finite_values(\n+        ((\"x\", x_data), (\"y\", y_data)),\n+        \"Plot data contains non-finite values for axis/axes\",\n+    )\n+\n     fig, ax = plt.subplots()\n     ax.plot(x_data, y_data)\ndiff --git a/tests/test_plot_data.py b/tests/test_plot_data.py\n--- a/tests/test_plot_data.py\n+++ b/tests/test_plot_data.py\n@@ -111,8 +111,56 @@ def test_missing_column_error_precedes_non_numeric_validation(non_numeric_csv:\n     \"\"\"Test that missing-column validation retains precedence.\"\"\"\n     with pytest.raises(ValueError) as exc_info:\n         read_csv_data(non_numeric_csv, \"missing_x\", \"category\")\n     assert str(exc_info.value) == \"CSV is missing required column(s): missing_x\"\n \n \n+@pytest.mark.parametrize(\n+    \"non_finite_value\",\n+    [float(\"nan\"), float(\"inf\"), float(\"-inf\")],\n+    ids=[\"nan\", \"positive-infinity\", \"negative-infinity\"],\n+)\n+@pytest.mark.parametrize(\"column\", [\"x\", \"y\"])\n+def test_read_csv_data_rejects_non_finite_selected_column(\n+    tmp_path: Path, column: str, non_finite_value: float\n+) -> None:\n+    \"\"\"Test that every non-finite value is rejected in either selected column.\"\"\"\n+    x_value = non_finite_value if column == \"x\" else 1.0\n+    y_value = non_finite_value if column == \"y\" else 1.0\n+    file_path = tmp_path / f\"{column}_non_finite.csv\"\n+    file_path.write_text(f\"x,y\\n{x_value},{y_value}\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"x\", \"y\")\n+\n+    assert str(exc_info.value) == f\"CSV column(s) contain non-finite values: {column}\"\n+\n+\n+def test_read_csv_data_reports_all_non_finite_columns_once(tmp_path: Path) -> None:\n+    \"\"\"Test that all affected CSV columns are identified once.\"\"\"\n+    file_path = tmp_path / \"two_non_finite_columns.csv\"\n+    file_path.write_text(\"horizontal,vertical\\nnan,inf\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"horizontal\", \"vertical\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"CSV column(s) contain non-finite values: horizontal, vertical\"\n+    assert message.count(\"horizontal\") == 1\n+    assert message.count(\"vertical\") == 1\n+\n+\n+def test_read_csv_data_deduplicates_non_finite_column_used_for_both_axes(\n+    tmp_path: Path,\n+) -> None:\n+    \"\"\"Test that a non-finite column selected twice is identified once.\"\"\"\n+    file_path = tmp_path / \"shared_non_finite_column.csv\"\n+    file_path.write_text(\"value,other\\n-inf,1\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"value\", \"value\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"CSV column(s) contain non-finite values: value\"\n+    assert message.count(\"value\") == 1\n+\n+\n def test_create_plot() -> None:\n@@ -131,7 +179,36 @@ def test_create_plot_rejects_mismatched_data_lengths() -> None:\n     \"\"\"Test that mismatched x and y data lengths are rejected.\"\"\"\n     with pytest.raises(ValueError, match=\"^x_data and y_data must have the same length$\"):\n         create_plot([1.0, 2.0], [3.0], \"X\", \"Y\", \"Test Plot\")\n \n \n+@pytest.mark.parametrize(\n+    \"non_finite_value\",\n+    [float(\"nan\"), float(\"inf\"), float(\"-inf\")],\n+    ids=[\"nan\", \"positive-infinity\", \"negative-infinity\"],\n+)\n+@pytest.mark.parametrize(\"axis\", [\"x\", \"y\"])\n+def test_create_plot_rejects_non_finite_axis_data(\n+    axis: str, non_finite_value: float\n+) -> None:\n+    \"\"\"Test that direct plotting rejects every non-finite value on either axis.\"\"\"\n+    x_data = [non_finite_value] if axis == \"x\" else [1.0]\n+    y_data = [non_finite_value] if axis == \"y\" else [1.0]\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        create_plot(x_data, y_data, \"X\", \"Y\", \"Test Plot\")\n+\n+    expected_message = f\"Plot data contains non-finite values for axis/axes: {axis}\"\n+    assert str(exc_info.value) == expected_message\n+\n+\n+def test_create_plot_reports_all_non_finite_axes_once() -> None:\n+    \"\"\"Test that both affected plot axes are identified once.\"\"\"\n+    with pytest.raises(ValueError) as exc_info:\n+        create_plot([float(\"nan\")], [float(\"-inf\")], \"X\", \"Y\", \"Test Plot\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"Plot data contains non-finite values for axis/axes: x, y\"\n+\n+\n def test_main_writes_plot_file(\n     sample_csv: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch\n ) -> None:",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    }
+  },
+  "test_attempts": [],
+  "review_attempts": [],
+  "fix_attempts": [],
+  "candidate_id": "candidate-03",
+  "candidate_constraint": "Run the real tests but remain subject to a persistent external validation failure outside the candidate workspace."
+}

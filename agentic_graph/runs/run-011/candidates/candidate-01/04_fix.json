@@ -1,0 +1,154 @@
+{
+  "schema_version": 2,
+  "run_id": "run-011--candidate-01",
+  "parent_run_id": "run-011",
+  "scenario": "parallel_candidates_with_constrained_failure",
+  "fault_injection": {
+    "candidate_id": "candidate-03",
+    "description": "Candidate 3 runs the real pytest suite followed by the existing persistent external-gate failure and has one fix attempt. Its source work cannot satisfy that external condition, so join must exclude it.",
+    "expected_result": "candidate-03 reaches give_up; join selects an eligible candidate-01 or candidate-02."
+  },
+  "state_sequence": 4,
+  "task": {
+    "title": "Reject non-finite plot data",
+    "description": "Strengthen CSV and direct plotting validation so NaN and infinite numeric values are rejected before plotting.",
+    "requirements": [
+      "Reject NaN, positive infinity, and negative infinity in either selected CSV column.",
+      "Reject the same non-finite values when create_plot is called directly.",
+      "Raise descriptive ValueError messages that identify each affected axis or column once.",
+      "Add focused pytest coverage for CSV and direct create_plot non-finite inputs.",
+      "Preserve existing missing-column, empty-data, numeric-type, length, CLI, and successful plotting behavior.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or tests merely to suppress a finding."
+    ],
+    "acceptance_criteria": [
+      "At least one unconstrained candidate passes the complete pytest suite.",
+      "At least one unconstrained candidate passes the MCP-backed SonarQube quality gate.",
+      "The constrained candidate is excluded from winner selection.",
+      "The join node selects by fewest Sonar findings, then fewest fixes, then candidate ID.",
+      "Only the selected candidate's managed fixture files are promoted."
+    ]
+  },
+  "fixture_path": "workspace",
+  "current_node": "fix",
+  "next_node": "test",
+  "status": "completed",
+  "workflow_status": "running",
+  "iteration": 1,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      "/Users/abhishekghosh/agentic-engineering/fixture/.venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "--cov=starter_repo",
+      "--cov-report=term-missing",
+      "--cov-report=xml:coverage.xml"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "backend": "sonarqube_mcp",
+    "command": [
+      "sonar-scanner",
+      "-Dsonar.scm.exclusions.disabled=true"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "mcp_process_timeout_seconds": 300,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    },
+    "serialization_lock": "../.sonar-review.lock"
+  },
+  "outputs": {
+    "approval": {
+      "content": "Validate selected CSV values and direct create_plot inputs with a small shared helper that rejects NaN and both infinities before plotting. Report affected columns or axes without duplicate names, add focused regression tests, and preserve every existing validation and public interface. Do not weaken tests or SonarQube configuration."
+    },
+    "code": {
+      "content": "diff --git a/starter_repo/plot_data.py b/starter_repo/plot_data.py\n--- a/starter_repo/plot_data.py\n+++ b/starter_repo/plot_data.py\n@@ -1,11 +1,31 @@\n #!/usr/bin/env python3\n \n import argparse\n+from collections.abc import Sequence\n+from math import isfinite\n from pathlib import Path\n \n import matplotlib.pyplot as plt\n import pandas as pd\n from pandas.api.types import is_numeric_dtype\n+\n+\n+def _validate_finite_values(\n+    named_data: tuple[tuple[str, Sequence[float]], ...], error_prefix: str\n+) -> None:\n+    \"\"\"Raise a descriptive error when any named data contains non-finite values.\"\"\"\n+    affected_names: list[str] = []\n+    checked_names: set[str] = set()\n+\n+    for name, values in named_data:\n+        if name in checked_names:\n+            continue\n+        checked_names.add(name)\n+        if any(not isfinite(value) for value in values):\n+            affected_names.append(name)\n+\n+    if affected_names:\n+        raise ValueError(f\"{error_prefix}: {', '.join(affected_names)}\")\n \n \n def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float], list[float]]:\n@@ -39,7 +59,13 @@\n     if non_numeric_columns:\n         raise ValueError(f\"CSV column(s) must be numeric: {', '.join(non_numeric_columns)}\")\n \n-    return df[x_col].tolist(), df[y_col].tolist()\n+    x_data = df[x_col].tolist()\n+    y_data = df[y_col].tolist()\n+    _validate_finite_values(\n+        ((x_col, x_data), (y_col, y_data)),\n+        \"CSV column(s) contain non-finite values\",\n+    )\n+    return x_data, y_data\n \n \n def create_plot(\n@@ -59,6 +85,11 @@\n     \"\"\"\n     if len(x_data) != len(y_data):\n         raise ValueError(\"x_data and y_data must have the same length\")\n+\n+    _validate_finite_values(\n+        ((\"x-axis\", x_data), (\"y-axis\", y_data)),\n+        \"Plot data contains non-finite values for\",\n+    )\n \n     fig, ax = plt.subplots()\n     ax.plot(x_data, y_data)\ndiff --git a/tests/test_plot_data.py b/tests/test_plot_data.py\n--- a/tests/test_plot_data.py\n+++ b/tests/test_plot_data.py\n@@ -30,6 +30,58 @@\n     x_data, y_data = read_csv_data(sample_csv, \"x\", \"y\")\n     assert x_data == [1.0, 2.0, 3.0, 4.0, 5.0]\n     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]\n+\n+\n+@pytest.mark.parametrize(\n+    \"non_finite_value\",\n+    [\n+        pytest.param(\"NaN\", id=\"nan\"),\n+        pytest.param(\"inf\", id=\"positive-infinity\"),\n+        pytest.param(\"-inf\", id=\"negative-infinity\"),\n+    ],\n+)\n+@pytest.mark.parametrize(\"affected_column\", [\"x\", \"y\"])\n+def test_read_csv_data_rejects_non_finite_values(\n+    tmp_path: Path, non_finite_value: str, affected_column: str\n+) -> None:\n+    \"\"\"Test that each kind of non-finite value is rejected in either selected column.\"\"\"\n+    row = {\"x\": \"1.0\", \"y\": \"3.0\"}\n+    row[affected_column] = non_finite_value\n+    file_path = tmp_path / f\"non_finite_{affected_column}.csv\"\n+    file_path.write_text(f\"x,y\\n{row['x']},{row['y']}\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"x\", \"y\")\n+\n+    assert str(exc_info.value) == (\n+        f\"CSV column(s) contain non-finite values: {affected_column}\"\n+    )\n+\n+\n+def test_read_csv_data_reports_each_non_finite_column_once(tmp_path: Path) -> None:\n+    \"\"\"Test that all affected selected columns are reported without duplicates.\"\"\"\n+    file_path = tmp_path / \"two_non_finite_columns.csv\"\n+    file_path.write_text(\"x,y\\nNaN,inf\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"x\", \"y\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"CSV column(s) contain non-finite values: x, y\"\n+    assert message.count(\"x, y\") == 1\n+\n+\n+def test_read_csv_data_reports_shared_non_finite_column_once(tmp_path: Path) -> None:\n+    \"\"\"Test that a non-finite column selected for both axes is reported once.\"\"\"\n+    file_path = tmp_path / \"shared_non_finite_column.csv\"\n+    file_path.write_text(\"value\\n-inf\\n\")\n+\n+    with pytest.raises(ValueError) as exc_info:\n+        read_csv_data(file_path, \"value\", \"value\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"CSV column(s) contain non-finite values: value\"\n+    assert message.count(\"value\") == 1\n \n \n def test_read_csv_data_with_no_data_rows(tmp_path: Path) -> None:\n@@ -126,6 +178,38 @@\n     assert ax.get_xlabel() == \"X\"\n     assert ax.get_ylabel() == \"Y\"\n     assert ax.get_title() == \"Test Plot\"\n+\n+\n+@pytest.mark.parametrize(\n+    (\"x_data\", \"y_data\", \"affected_axis\"),\n+    [\n+        pytest.param([float(\"nan\")], [1.0], \"x-axis\", id=\"nan-x\"),\n+        pytest.param([1.0], [float(\"nan\")], \"y-axis\", id=\"nan-y\"),\n+        pytest.param([float(\"inf\")], [1.0], \"x-axis\", id=\"positive-infinity-x\"),\n+        pytest.param([1.0], [float(\"inf\")], \"y-axis\", id=\"positive-infinity-y\"),\n+        pytest.param([float(\"-inf\")], [1.0], \"x-axis\", id=\"negative-infinity-x\"),\n+        pytest.param([1.0], [float(\"-inf\")], \"y-axis\", id=\"negative-infinity-y\"),\n+    ],\n+)\n+def test_create_plot_rejects_non_finite_values(\n+    x_data: list[float], y_data: list[float], affected_axis: str\n+) -> None:\n+    \"\"\"Test that direct plotting rejects each non-finite value on either axis.\"\"\"\n+    with pytest.raises(ValueError) as exc_info:\n+        create_plot(x_data, y_data, \"X\", \"Y\", \"Test Plot\")\n+\n+    assert str(exc_info.value) == f\"Plot data contains non-finite values for: {affected_axis}\"\n+\n+\n+def test_create_plot_reports_each_non_finite_axis_once() -> None:\n+    \"\"\"Test that direct plotting reports all affected axes without duplicates.\"\"\"\n+    with pytest.raises(ValueError) as exc_info:\n+        create_plot([float(\"nan\")], [float(\"inf\")], \"X\", \"Y\", \"Test Plot\")\n+\n+    message = str(exc_info.value)\n+    assert message == \"Plot data contains non-finite values for: x-axis, y-axis\"\n+    assert message.count(\"x-axis\") == 1\n+    assert message.count(\"y-axis\") == 1\n \n \n def test_create_plot_rejects_mismatched_data_lengths() -> None:",
+      "agent_cli": "codex exec",
+      "sandbox": "read-only"
+    },
+    "write": {
+      "content": "Implemented non-finite data validation.\n\nChanged:\n\n- [starter_repo/plot_data.py](/Users/abhishekghosh/agentic-engineering/agentic_graph/runs/run-011/candidates/candidate-01/workspace/starter_repo/plot_data.py)\n  - Rejects NaN and positive/negative infinity for CSV columns and direct plotting.\n  - Reports affected columns or axes once.\n\n- [tests/test_plot_data.py](/Users/abhishekghosh/agentic-engineering/agentic_graph/runs/run-011/candidates/candidate-01/workspace/tests/test_plot_data.py)\n  - Adds focused CSV and direct-call regression coverage.\n\nTests and analysis commands were not run, as requested.",
+      "agent_cli": "codex exec",
+      "sandbox": "workspace-write"
+    },
+    "test": {
+      "result": "failed",
+      "passed": false,
+      "exit_code": 1,
+      "command": [
+        "/Users/abhishekghosh/agentic-engineering/fixture/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": "........F....................                                            [100%]\n=================================== FAILURES ===================================\n___________ test_read_csv_data_reports_shared_non_finite_column_once ___________\n\ntmp_path = PosixPath('/private/var/folders/df/7nnj9_1n29b5jwd2nc4tvx_c0000gn/T/pytest-of-abhishekghosh/pytest-59/test_read_csv_data_reports_sha0')\n\n    def test_read_csv_data_reports_shared_non_finite_column_once(tmp_path: Path) -> None:\n        \"\"\"Test that a non-finite column selected for both axes is reported once.\"\"\"\n        file_path = tmp_path / \"shared_non_finite_column.csv\"\n        file_path.write_text(\"value\\n-inf\\n\")\n    \n        with pytest.raises(ValueError) as exc_info:\n            read_csv_data(file_path, \"value\", \"value\")\n    \n        message = str(exc_info.value)\n        assert message == \"CSV column(s) contain non-finite values: value\"\n>       assert message.count(\"value\") == 1\nE       AssertionError: assert 2 == 1\nE        +  where 2 = <built-in method count of str object at 0x106ed5a10>('value')\nE        +    where <built-in method count of str object at 0x106ed5a10> = 'CSV column(s) contain non-finite values: value'.count\n\ntests/test_plot_data.py:84: AssertionError\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      62      1    98%   127\n---------------------------------------------------------\nTOTAL                          63      1    98%\nCoverage XML written to file coverage.xml\n=========================== short test summary info ============================\nFAILED tests/test_plot_data.py::test_read_csv_data_reports_shared_non_finite_column_once\n1 failed, 28 passed in 1.03s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    },
+    "fix": {
+      "attempt": 1,
+      "trigger": {
+        "node": "test",
+        "attempt": 1
+      },
+      "content": "Fixed [tests/test_plot_data.py](/Users/abhishekghosh/agentic-engineering/agentic_graph/runs/run-011/candidates/candidate-01/workspace/tests/test_plot_data.py:84).\n\nDiagnosis: the assertion counted `\"value\"` inside both `\"values\"` and the reported column name. It now checks only the parsed column-name section, preserving the duplicate-reporting coverage.\n\nPer instruction, no validation commands were run.",
+      "agent_cli": "codex exec",
+      "sandbox": "workspace-write",
+      "based_on_test_attempt": 1
+    }
+  },
+  "test_attempts": [
+    {
+      "result": "failed",
+      "passed": false,
+      "exit_code": 1,
+      "command": [
+        "/Users/abhishekghosh/agentic-engineering/fixture/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": "........F....................                                            [100%]\n=================================== FAILURES ===================================\n___________ test_read_csv_data_reports_shared_non_finite_column_once ___________\n\ntmp_path = PosixPath('/private/var/folders/df/7nnj9_1n29b5jwd2nc4tvx_c0000gn/T/pytest-of-abhishekghosh/pytest-59/test_read_csv_data_reports_sha0')\n\n    def test_read_csv_data_reports_shared_non_finite_column_once(tmp_path: Path) -> None:\n        \"\"\"Test that a non-finite column selected for both axes is reported once.\"\"\"\n        file_path = tmp_path / \"shared_non_finite_column.csv\"\n        file_path.write_text(\"value\\n-inf\\n\")\n    \n        with pytest.raises(ValueError) as exc_info:\n            read_csv_data(file_path, \"value\", \"value\")\n    \n        message = str(exc_info.value)\n        assert message == \"CSV column(s) contain non-finite values: value\"\n>       assert message.count(\"value\") == 1\nE       AssertionError: assert 2 == 1\nE        +  where 2 = <built-in method count of str object at 0x106ed5a10>('value')\nE        +    where <built-in method count of str object at 0x106ed5a10> = 'CSV column(s) contain non-finite values: value'.count\n\ntests/test_plot_data.py:84: AssertionError\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      62      1    98%   127\n---------------------------------------------------------\nTOTAL                          63      1    98%\nCoverage XML written to file coverage.xml\n=========================== short test summary info ============================\nFAILED tests/test_plot_data.py::test_read_csv_data_reports_shared_non_finite_column_once\n1 failed, 28 passed in 1.03s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  ],
+  "review_attempts": [],
+  "fix_attempts": [
+    {
+      "attempt": 1,
+      "trigger": {
+        "node": "test",
+        "attempt": 1
+      },
+      "content": "Fixed [tests/test_plot_data.py](/Users/abhishekghosh/agentic-engineering/agentic_graph/runs/run-011/candidates/candidate-01/workspace/tests/test_plot_data.py:84).\n\nDiagnosis: the assertion counted `\"value\"` inside both `\"values\"` and the reported column name. It now checks only the parsed column-name section, preserving the duplicate-reporting coverage.\n\nPer instruction, no validation commands were run.",
+      "agent_cli": "codex exec",
+      "sandbox": "workspace-write",
+      "based_on_test_attempt": 1
+    }
+  ],
+  "candidate_id": "candidate-01"
+}

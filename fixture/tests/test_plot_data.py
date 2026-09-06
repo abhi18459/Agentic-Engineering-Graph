@@ -32,6 +32,53 @@ def test_read_csv_data(sample_csv: Path) -> None:
     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]
 
 
+@pytest.mark.parametrize(
+    "csv_value",
+    ["NaN", "inf", "-inf"],
+    ids=["nan", "positive_inf", "negative_inf"],
+)
+@pytest.mark.parametrize("affected_column", ["horizontal", "vertical"])
+def test_read_csv_data_rejects_non_finite_values_in_either_column(
+    tmp_path: Path, csv_value: str, affected_column: str
+) -> None:
+    """Test that each kind of non-finite value is rejected in either selected column."""
+    x_value = csv_value if affected_column == "horizontal" else "1.0"
+    y_value = csv_value if affected_column == "vertical" else "2.0"
+    file_path = tmp_path / "non_finite.csv"
+    file_path.write_text(f"horizontal,vertical\n{x_value},{y_value}\n")
+
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(file_path, "horizontal", "vertical")
+    message = str(exc_info.value)
+    assert message == f"CSV column(s) contain non-finite values: {affected_column}"
+    assert message.count(affected_column) == 1
+
+
+def test_read_csv_data_reports_each_non_finite_column_once(tmp_path: Path) -> None:
+    """Test that all affected columns are reported once in selection order."""
+    file_path = tmp_path / "two_non_finite_columns.csv"
+    file_path.write_text("horizontal,vertical\nNaN,-inf\n")
+
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(file_path, "horizontal", "vertical")
+    message = str(exc_info.value)
+    assert message == "CSV column(s) contain non-finite values: horizontal, vertical"
+    assert message.count("horizontal") == 1
+    assert message.count("vertical") == 1
+
+
+def test_read_csv_data_reports_shared_non_finite_column_once(tmp_path: Path) -> None:
+    """Test that a non-finite column selected twice is not reported twice."""
+    file_path = tmp_path / "shared_non_finite_column.csv"
+    file_path.write_text("horizontal\ninf\n")
+
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(file_path, "horizontal", "horizontal")
+    message = str(exc_info.value)
+    assert message == "CSV column(s) contain non-finite values: horizontal"
+    assert message.count("horizontal") == 1
+
+
 def test_read_csv_data_with_no_data_rows(tmp_path: Path) -> None:
     """Test that a header-only CSV raises a descriptive ValueError."""
     file_path = tmp_path / "header_only.csv"
@@ -132,6 +179,40 @@ def test_create_plot_rejects_mismatched_data_lengths() -> None:
     """Test that mismatched x and y data lengths are rejected."""
     with pytest.raises(ValueError, match="^x_data and y_data must have the same length$"):
         create_plot([1.0, 2.0], [3.0], "X", "Y", "Test Plot")
+
+
+@pytest.mark.parametrize(
+    "non_finite_value",
+    [float("nan"), float("inf"), float("-inf")],
+    ids=["nan", "positive_inf", "negative_inf"],
+)
+@pytest.mark.parametrize("affected_axis", ["x_data", "y_data"])
+def test_create_plot_rejects_non_finite_values_on_either_axis(
+    non_finite_value: float, affected_axis: str
+) -> None:
+    """Test that each kind of non-finite value is rejected on either plot axis."""
+    x_data = [1.0, 2.0]
+    y_data = [3.0, 4.0]
+    if affected_axis == "x_data":
+        x_data[1] = non_finite_value
+    else:
+        y_data[1] = non_finite_value
+
+    with pytest.raises(ValueError) as exc_info:
+        create_plot(x_data, y_data, "X", "Y", "Test Plot")
+    message = str(exc_info.value)
+    assert message == f"Plot axis data contains non-finite values: {affected_axis}"
+    assert message.count(affected_axis) == 1
+
+
+def test_create_plot_reports_each_non_finite_axis_once() -> None:
+    """Test that both affected axes are each reported once."""
+    with pytest.raises(ValueError) as exc_info:
+        create_plot([float("nan")], [float("inf")], "X", "Y", "Test Plot")
+    message = str(exc_info.value)
+    assert message == "Plot axis data contains non-finite values: x_data, y_data"
+    assert message.count("x_data") == 1
+    assert message.count("y_data") == 1
 
 
 def test_main_writes_plot_file(

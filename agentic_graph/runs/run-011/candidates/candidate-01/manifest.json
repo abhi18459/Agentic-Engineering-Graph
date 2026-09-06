@@ -1,0 +1,94 @@
+{
+  "manifest_schema_version": 1,
+  "run_id": "run-011--candidate-01",
+  "created_at": "2026-09-06T14:01:25+00:00",
+  "updated_at": "2026-09-06T14:10:47+00:00",
+  "workflow_status": "succeeded",
+  "current_node": "END",
+  "checkpoint": {
+    "state_file": "06_review.json",
+    "state_sequence": 6,
+    "next_node": "END"
+  },
+  "attempts": [
+    {
+      "attempt_id": 1,
+      "node": "code",
+      "input_state": "00_input.json",
+      "output_state": "01_code.json",
+      "started_at": "2026-09-06T14:01:25+00:00",
+      "completed_at": "2026-09-06T14:08:08+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "write",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 2,
+      "node": "write",
+      "input_state": "01_code.json",
+      "output_state": "02_write.json",
+      "started_at": "2026-09-06T14:08:08+00:00",
+      "completed_at": "2026-09-06T14:09:24+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "test",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 3,
+      "node": "test",
+      "input_state": "02_write.json",
+      "output_state": "03_test.json",
+      "started_at": "2026-09-06T14:09:24+00:00",
+      "completed_at": "2026-09-06T14:09:26+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "fix",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 4,
+      "node": "fix",
+      "input_state": "03_test.json",
+      "output_state": "04_fix.json",
+      "started_at": "2026-09-06T14:09:26+00:00",
+      "completed_at": "2026-09-06T14:09:58+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "test",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 5,
+      "node": "test",
+      "input_state": "04_fix.json",
+      "output_state": "05_test.json",
+      "started_at": "2026-09-06T14:09:58+00:00",
+      "completed_at": "2026-09-06T14:09:59+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "review",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 6,
+      "node": "review",
+      "input_state": "05_test.json",
+      "output_state": "06_review.json",
+      "started_at": "2026-09-06T14:09:59+00:00",
+      "completed_at": "2026-09-06T14:10:47+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "END",
+      "error": null,
+      "recovered": false
+    }
+  ],
+  "recoveries": []
+}

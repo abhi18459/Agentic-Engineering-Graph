@@ -1,0 +1,42 @@
+{
+  "manifest_schema_version": 1,
+  "run_id": "run-011",
+  "created_at": "2026-09-06T14:01:25+00:00",
+  "updated_at": "2026-09-06T14:10:48+00:00",
+  "workflow_status": "succeeded",
+  "current_node": "END",
+  "checkpoint": {
+    "state_file": "02_join.json",
+    "state_sequence": 2,
+    "next_node": "END"
+  },
+  "attempts": [
+    {
+      "attempt_id": 1,
+      "node": "fan_out",
+      "input_state": "00_input.json",
+      "output_state": "01_fan_out.json",
+      "started_at": "2026-09-06T14:01:25+00:00",
+      "completed_at": "2026-09-06T14:10:47+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "join",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 2,
+      "node": "join",
+      "input_state": "01_fan_out.json",
+      "output_state": "02_join.json",
+      "started_at": "2026-09-06T14:10:47+00:00",
+      "completed_at": "2026-09-06T14:10:48+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "END",
+      "error": null,
+      "recovered": false
+    }
+  ],
+  "recoveries": []
+}
