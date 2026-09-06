@@ -138,25 +138,32 @@ def successful_call(call: dict[str, Any]) -> bool:
     )
 
 
+def exclusive_argument(
+    arguments: dict[str, Any], names: tuple[str, ...], expected: Any
+) -> bool:
+    """Accept exactly one version-specific alias with the expected value."""
+    supplied = [arguments[name] for name in names if name in arguments]
+    return len(supplied) == 1 and supplied[0] == expected
+
+
 def call_targets_project(call: dict[str, Any], project_key: str) -> bool:
     """Require each Sonar tool call to target the scanner-reported project."""
     arguments = call["arguments"]
     tool = call["tool"]
     if tool == "search_sonar_issues_in_projects":
-        projects = arguments.get("projects")
         statuses = arguments.get("issueStatuses")
         return (
-            projects == [project_key]
+            exclusive_argument(arguments, ("projectKeys", "projects"), [project_key])
             and isinstance(statuses, list)
             and all(isinstance(status, str) for status in statuses)
             and set(statuses) == {"OPEN", "CONFIRMED"}
-            and arguments.get("ps") == 500
+            and exclusive_argument(arguments, ("pageSize", "ps"), 500)
         )
     if tool == "search_security_hotspots":
         return (
             arguments.get("projectKey") == project_key
             and arguments.get("status") == "TO_REVIEW"
-            and arguments.get("ps") == 500
+            and exclusive_argument(arguments, ("pageSize", "ps"), 500)
         )
     return arguments == {"projectKey": project_key}
 

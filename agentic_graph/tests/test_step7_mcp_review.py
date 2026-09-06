@@ -51,14 +51,18 @@ def required_events() -> list[dict]:
         completed_call(
             "search_sonar_issues_in_projects",
             {
-                "projects": [PROJECT_KEY],
+                "projectKeys": [PROJECT_KEY],
                 "issueStatuses": ["OPEN", "CONFIRMED"],
-                "ps": 500,
+                "pageSize": 500,
             },
         ),
         completed_call(
             "search_security_hotspots",
-            {"projectKey": PROJECT_KEY, "status": "TO_REVIEW", "ps": 500},
+            {
+                "projectKey": PROJECT_KEY,
+                "status": "TO_REVIEW",
+                "pageSize": 500,
+            },
         ),
     ]
 
@@ -107,6 +111,27 @@ class McpProvenanceTest(unittest.TestCase):
     def test_required_project_scoped_calls_are_accepted(self) -> None:
         calls = mcp_tool_calls(required_events())
         self.assertEqual(validate_tool_calls(calls, PROJECT_KEY), calls)
+
+    def test_legacy_argument_aliases_are_accepted(self) -> None:
+        events = required_events()
+        events[1]["item"]["arguments"] = {
+            "projects": [PROJECT_KEY],
+            "issueStatuses": ["OPEN", "CONFIRMED"],
+            "ps": 500,
+        }
+        events[2]["item"]["arguments"] = {
+            "projectKey": PROJECT_KEY,
+            "status": "TO_REVIEW",
+            "ps": 500,
+        }
+        calls = mcp_tool_calls(events)
+        self.assertEqual(validate_tool_calls(calls, PROJECT_KEY), calls)
+
+    def test_wrong_page_size_is_rejected(self) -> None:
+        events = required_events()
+        events[1]["item"]["arguments"]["pageSize"] = 100
+        with self.assertRaises(McpReviewError):
+            validate_tool_calls(mcp_tool_calls(events), PROJECT_KEY)
 
     def test_missing_required_call_is_rejected(self) -> None:
         calls = mcp_tool_calls(required_events()[:-1])

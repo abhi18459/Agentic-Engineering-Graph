@@ -8,11 +8,13 @@ You must successfully call all three of these SonarQube MCP tools for the exact
 project key above:
 
 1. `get_project_quality_gate_status`, with `projectKey` set to the project key.
-2. `search_sonar_issues_in_projects`, with `projects` containing only the
-   project key, `issueStatuses` set to `OPEN` and `CONFIRMED`, and `ps` set to
-   500.
+2. `search_sonar_issues_in_projects`, with `projectKeys` containing only the
+   project key, `issueStatuses` set to `OPEN` and `CONFIRMED`, and `pageSize`
+   set to 500. If the tool schema instead exposes the compatibility names
+   `projects` and `ps`, use those names with the same values.
 3. `search_security_hotspots`, with `projectKey` set to the project key,
-   `status` set to `TO_REVIEW`, and `ps` set to 500.
+   `status` set to `TO_REVIEW`, and `pageSize` set to 500. If the tool schema
+   instead exposes `ps`, use it with the same value.
 
 Do not call tools that change issues, hotspots, quality gates, profiles, project
 settings, or source code. If any required query fails, do not guess or report a
