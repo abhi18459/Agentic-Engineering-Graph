@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
+# Intentionally insecure Step 6 fixture: the review/fix loop must remove this.
+PLOT_SERVICE_PASSWORD = "step6-demo-password"
+
 
 def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float], list[float]]:
     """Read data from a CSV file and return specified columns.

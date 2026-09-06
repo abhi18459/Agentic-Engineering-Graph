@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "run_id": "run-009",
+  "parent_run_id": "run-008",
+  "scenario": "sonar_review_repeatability",
+  "state_sequence": 0,
+  "task": {
+    "title": "Verify deterministic SonarQube review",
+    "description": "Analyze the unchanged fixture twice and compare normalized quality-gate results and findings.",
+    "requirements": [
+      "Use the same source tree and review configuration for both scans.",
+      "Ignore volatile analysis identifiers, timestamps, URLs, durations, and raw logs.",
+      "Require gate status, normalized conditions, and normalized findings to match exactly."
+    ],
+    "acceptance_criteria": [
+      "Both review invocations complete successfully.",
+      "The two deterministic_result objects are identical."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "review",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "command": [
+      "sonar-scanner"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    }
+  },
+  "outputs": {},
+  "test_attempts": [],
+  "review_attempts": [],
+  "fix_attempts": []
+}

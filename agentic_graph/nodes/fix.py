@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repair the current fixture after a recorded, repairable test failure."""
+"""Repair the current fixture after a test or quality-gate failure."""
 
 from __future__ import annotations
 
@@ -25,17 +25,30 @@ from common import (
 DEFAULT_PROMPT = GRAPH_ROOT / "prompts" / "fix.txt"
 
 
-def latest_repairable_failure(state: dict[str, Any]) -> dict[str, Any]:
-    """Return the most recent test failure that the coding agent may repair."""
-    if not state["test_attempts"]:
-        raise NodeError("Fix requires at least one recorded test attempt")
-    attempt = state["test_attempts"][-1]
+def latest_repairable_failure(
+    state: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Return the test or review failure that routed directly to fix."""
+    trigger_node = state.get("current_node")
+    if trigger_node == "test":
+        history_name = "test_attempts"
+    elif trigger_node == "review":
+        history_name = "review_attempts"
+    else:
+        raise NodeError("Fix must be routed directly from test or review")
+
+    history = state.get(history_name)
+    if not isinstance(history, list) or not history:
+        raise NodeError(f"Fix requires a recorded {trigger_node} attempt")
+    attempt = history[-1]
     if not isinstance(attempt, dict) or attempt.get("result") != "failed":
-        raise NodeError("Fix requires the latest test attempt to be a test failure")
+        raise NodeError(
+            f"Fix requires the latest {trigger_node} attempt to have failed"
+        )
     attempt_number = attempt.get("attempt")
     if not isinstance(attempt_number, int) or isinstance(attempt_number, bool):
-        raise NodeError("Latest test failure has no valid attempt number")
-    return attempt
+        raise NodeError(f"Latest {trigger_node} failure has no valid attempt number")
+    return trigger_node, attempt
 
 
 def main() -> int:
@@ -49,14 +62,14 @@ def main() -> int:
         instructions = read_prompt(args.prompt_file)
         plan = approved_plan_content(state)
         previous_code = output_content(state, "code")
-        failure = latest_repairable_failure(state)
+        trigger_node, failure = latest_repairable_failure(state)
         prior_fixes = json.dumps(state["fix_attempts"], indent=2, ensure_ascii=False)
         prompt = (
             f"{instructions}\n\n"
             f"## Original task\n\n{task_as_json(state)}\n\n"
             f"## Human-approved plan\n\n{plan}\n\n"
             f"## Previous code proposal\n\n{previous_code}\n\n"
-            f"## Latest failing test result\n\n"
+            f"## Repair trigger\n\nNode: {trigger_node}\n\n"
             f"{json.dumps(failure, indent=2, ensure_ascii=False)}\n\n"
             f"## Earlier fix attempts\n\n{prior_fixes}\n"
         )
@@ -65,11 +78,12 @@ def main() -> int:
         attempt_number = state["iteration"] + 1
         fix_attempt = {
             "attempt": attempt_number,
-            "based_on_test_attempt": failure["attempt"],
+            "trigger": {"node": trigger_node, "attempt": failure["attempt"]},
             "content": fix_result,
             "agent_cli": "codex exec",
             "sandbox": "workspace-write",
         }
+        fix_attempt[f"based_on_{trigger_node}_attempt"] = failure["attempt"]
         updated = advance_state(
             state,
             current_node="fix",

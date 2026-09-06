@@ -78,15 +78,20 @@ def read_state(path: Path, expected_next_node: str) -> dict[str, Any]:
         raise NodeError("iteration cannot exceed max_iterations")
 
     test_attempts = value.get("test_attempts")
+    review_attempts = value.get("review_attempts", [])
     fix_attempts = value.get("fix_attempts")
     if not isinstance(test_attempts, list):
         raise NodeError("Input state must contain a test_attempts array")
     if not isinstance(fix_attempts, list):
         raise NodeError("Input state must contain a fix_attempts array")
+    if not isinstance(review_attempts, list):
+        raise NodeError("review_attempts must be an array when present")
     if len(fix_attempts) != iteration:
         raise NodeError("iteration must equal the number of recorded fix attempts")
     if not isinstance(value.get("test_config"), dict):
         raise NodeError("Input state must contain a test_config object")
+    if "review_config" in value and not isinstance(value["review_config"], dict):
+        raise NodeError("review_config must be an object when present")
     return value
 
 

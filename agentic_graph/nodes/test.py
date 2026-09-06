@@ -147,8 +147,8 @@ def main() -> int:
         attempt["fix_iteration"] = state["iteration"]
 
         if attempt["result"] == "passed":
-            next_node = "END"
-            workflow_status = "succeeded"
+            next_node = "review"
+            workflow_status = "running"
         elif (
             attempt["result"] == "failed"
             and state["iteration"] < state["max_iterations"]

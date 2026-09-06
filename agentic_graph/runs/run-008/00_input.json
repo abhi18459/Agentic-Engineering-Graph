@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "run_id": "run-008",
+  "parent_run_id": "run-007",
+  "scenario": "sonar_quality_gate_failure_and_fix",
+  "state_sequence": 0,
+  "task": {
+    "title": "Remove the intentionally hard-coded plot service credential",
+    "description": "Make the fixture pass its existing tests and deterministic SonarQube quality gate without weakening either validation system.",
+    "requirements": [
+      "Remove the intentionally hard-coded PLOT_SERVICE_PASSWORD from starter_repo/plot_data.py.",
+      "Do not replace it with another embedded credential or secret-like literal.",
+      "Preserve the existing CSV validation, plotting behavior, public API, and test coverage.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or tests merely to suppress the finding."
+    ],
+    "acceptance_criteria": [
+      "The existing pytest suite passes.",
+      "SonarQube reports a passing quality gate.",
+      "The hard-coded credential finding is absent after the repair.",
+      "No Sonar suppression or validation weakening is introduced."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "test",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "command": [
+      "sonar-scanner"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    }
+  },
+  "outputs": {
+    "approval": {
+      "content": "Remove the intentionally hard-coded plot service password from the fixture source. Preserve all behavior and tests. Do not change or suppress SonarQube configuration; allow the deterministic review node to verify the repair."
+    },
+    "code": {
+      "content": "The starting fixture deliberately contains a module-level PLOT_SERVICE_PASSWORD literal solely to drive the Step 6 Sonar failure path. Remove that credential without changing the CSV or plotting APIs."
+    }
+  },
+  "test_attempts": [],
+  "review_attempts": [],
+  "fix_attempts": []
+}

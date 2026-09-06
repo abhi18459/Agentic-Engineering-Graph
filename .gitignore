@@ -29,6 +29,7 @@ ENV/
 # Ephemeral agent-graph dispatcher files
 /agentic_graph/runs/*/.dispatcher.lock
 /agentic_graph/runs/*/.*.tmp
+/agentic_graph/runs/*/.sonar-review-*/
 
 # Local secrets
 .env

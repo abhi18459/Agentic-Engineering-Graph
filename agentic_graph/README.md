@@ -1,18 +1,19 @@
 # Agentic Engineering Graph
 
-This directory contains the Step 5 implementation for
+This directory contains the Step 6 implementation for
 [Coding Challenge #134](https://codingchallenges.substack.com/p/coding-challenge-134-agentic-engineering).
-It preserves the Step 3 test/fix loop and Step 4 crash recovery, and adds a
-durable human approval boundary after planning:
+It preserves the test/fix loop, crash recovery, and durable human plan approval,
+and adds a deterministic SonarQube review gate:
 
 ```text
-plan -> approval pause -> code -> write -> test --pass-----------------> END
-                                     |
-                                     +--repairable failure-> fix --+
-                                                          ^        |
-                                                          +--test<-+
-                                     |
-                                     +--limit/error----------------> give_up
+plan -> approval pause -> code -> write -> test --pass-> review --pass-> END
+                                     |                 |
+                                     |                 +--failed gate--+
+                                     +--failed test--------------------> fix
+                                                                        |
+                                                       review <- test <-+
+
+test/review --limit or infrastructure error-----------------------> give_up
 ```
 
 Every `fix` invocation edits the same fixture working tree left by `write` and
@@ -30,12 +31,15 @@ agentic_graph/
 ├── approve_plan.py
 ├── run_manifest.py
 ├── list_runs.py
+├── verify_review_repeatability.py
 ├── nodes/
 │   ├── common.py
 │   ├── plan.py
 │   ├── code.py
 │   ├── write.py
 │   ├── test.py
+│   ├── review.py
+│   ├── sonar_client.py
 │   └── fix.py
 ├── prompts/
 │   ├── plan.txt
@@ -44,13 +48,15 @@ agentic_graph/
 │   └── fix.txt
 ├── tests/
 │   ├── test_step4_recovery.py
-│   └── test_step5_approval.py
+│   ├── test_step5_approval.py
+│   └── test_step6_review.py
 └── runs/
     ├── run-001/          # Completed Step 2 evidence
     ├── run-002..004/     # Completed Step 3 evidence
     ├── run-005/          # Completed Step 4 evidence
-    └── run-006/
-        └── 00_input.json # Prepared Step 5 approval run
+    ├── run-006..007/     # Completed Step 5 evidence
+    ├── run-008/          # Prepared failed-gate/fix validation
+    └── run-009/          # Prepared repeatability input
 ```
 
 Nodes remain independently executable. They read one state snapshot, do their
@@ -59,7 +65,8 @@ scoped work, and write one new snapshot. Nodes do not invoke one another.
 The dispatcher owns control flow. It maps trusted node names to scripts, derives
 the next immutable filename from `state_sequence`, runs the selected node,
 validates the transition, records it in the run manifest, pauses at `approval`,
-and stops at `END` or `give_up`.
+and stops at `END` or `give_up`. A run reaches `END` only after both tests and
+SonarQube review pass.
 
 `run_manifest.py` is reusable program code beside the dispatcher. The actual
 manifest data is isolated inside its own run directory as `manifest.json`; runs
@@ -72,20 +79,16 @@ more than once. Step 3 therefore derives each filename dynamically:
 
 ```text
 00_input.json
-01_plan.json
-02_approval.json
-03_code.json
-04_write.json
-05_test.json       # failed
-06_fix.json        # first in-place repair
-07_test.json       # failed
-08_fix.json        # second in-place repair
-09_test.json       # passed
+01_test.json        # passed
+02_review.json      # failed quality gate
+03_fix.json         # first in-place repair
+04_test.json        # passed
+05_review.json      # passed quality gate
 ```
 
 Snapshots are never overwritten. Every file is standalone JSON containing the
-task, configuration, current state, accumulated outputs, and complete test/fix
-histories.
+task, configuration, current state, accumulated outputs, and complete test,
+review, and fix histories.
 
 Snapshot publication is atomic. A node first writes and flushes a temporary file
 beside the intended snapshot, then publishes the completed file under its final
@@ -139,8 +142,10 @@ The graph state continues to use `schema_version: 2`. Its core fields are:
 - `iteration`: number of completed fix attempts.
 - `max_iterations`: maximum permitted fix attempts.
 - `test_config`: deterministic command, timeout, environment, and exit-code policy.
+- `review_config`: scanner command plus quality-gate, process, and API timeouts.
 - `outputs`: latest output from each node, for convenient access.
 - `test_attempts`: ordered history of every test execution.
+- `review_attempts`: ordered history of every SonarQube review.
 - `fix_attempts`: ordered history of every Codex repair.
 
 `iteration` counts fixes, not tests. With `max_iterations: 3`, the graph performs
@@ -155,7 +160,7 @@ The prepared pytest configuration classifies exit codes as follows:
 
 | Exit | Classification | Route |
 |---|---|---|
-| `0` | Tests passed | `END` |
+| `0` | Tests passed | `review` |
 | `1` | Repairable test failure | `fix`, if budget remains |
 | `1` after final fix | Repair budget exhausted | `give_up` |
 | Any other exit, signal, timeout, or launch failure | Test-runner error | `give_up` |
@@ -171,13 +176,50 @@ avoid the previously diagnosed Anaconda `readline` crash.
 - The original task.
 - The human-approved plan.
 - The original code proposal.
-- The latest failing test result and captured output.
+- The latest failing test result or failed Sonar review, including findings.
 - Every earlier fix result.
 
 The prompt explicitly requires Codex to inspect and repair the current fixture,
 build on previous changes, avoid resets or checkouts, preserve meaningful tests,
-and leave validation to the deterministic test node. After each fix, the graph
-routes back to `test`.
+and leave validation to the deterministic test and review nodes. It also forbids
+weakening Sonar configuration or adding suppressions merely to pass the gate.
+After each fix, the graph routes back to `test`, followed by `review` when tests
+pass.
+
+## Deterministic SonarQube review
+
+`review.py` runs SonarScanner without a shell and forces these settings even if
+the properties file changes:
+
+```text
+sonar.qualitygate.wait=true
+sonar.qualitygate.timeout=300
+```
+
+The five-minute quality-gate timeout is Sonar's documented default. It is ample
+for the small fixture and a normal SonarQube Cloud compute queue while remaining
+bounded. The outer 360-second process timeout provides one additional minute for
+scanner startup, local analysis, and report upload. Each Web API request has a
+30-second network timeout.
+
+The scanner token is read only from `SONAR_TOKEN`. It is never accepted inside
+`review_config`, passed on the command line, or written to state. The node reads
+the scanner's temporary `report-task.txt`, looks up that exact analysis, and
+records:
+
+- Quality-gate status and conditions.
+- Unresolved issues and security hotspots.
+- Stable normalized findings for repair and comparison.
+- Scanner diagnostics and volatile analysis identifiers outside the stable
+  comparison payload.
+
+A failed gate is a successful review-node execution whose state routes to
+`fix`. Missing credentials, scanner launch failures, timeouts, failed compute
+tasks, or unusable API responses route to `give_up` as infrastructure errors.
+
+The `deterministic_result` object deliberately excludes timestamps, durations,
+analysis/task IDs, URLs, and raw logs. Findings are normalized and sorted by
+their stable content.
 
 ## Human plan approval
 
@@ -197,64 +239,75 @@ On the next dispatcher invocation, the approval control point writes
 like other completed transitions and participates in the same orphan-snapshot
 recovery behavior.
 
-## Before running Step 5
+## Before running Step 6
 
-1. Review `runs/run-006/00_input.json`.
-2. Confirm `fixture_path` points to the intended working tree.
-3. Confirm the fixture is in the starting state you want the run to modify.
-4. Confirm `.venv/bin/python -m pytest -q` is the intended test command.
-5. Confirm Codex CLI is installed and authenticated.
-6. Commit the pre-run state if you want a clean checkpoint and auditable diff.
+1. Review `runs/run-008/00_input.json` and `runs/run-009/00_input.json`.
+2. Confirm `fixture_path` points to the intended iterative fixture working tree.
+3. Confirm Codex CLI is installed and authenticated for the repair node.
+4. Confirm `sonar-scanner` is installed and the Sonar project in
+   `../fixture/sonar-project.properties` is accessible.
+5. Make `SONAR_TOKEN` available in the shell without printing or committing it.
+6. Confirm the active quality gate fails for an unreviewed hard-coded credential.
+7. Commit the pre-run state if you want an auditable checkpoint.
 
-## Run or resume the prepared workflow
+The fixture currently contains the intentionally insecure
+`PLOT_SERVICE_PASSWORD` constant used to drive the required failure path. It is
+not a real credential. `run-008` begins at `test` so the unchanged passing tests
+lead into a failing Sonar review, after which `fix` should remove the constant.
+
+## Verify repeatability before the repair
+
+While the deliberate finding is still present, run the real review node twice
+against identical input and source:
+
+```bash
+python3 agentic_graph/verify_review_repeatability.py \
+  --input-state agentic_graph/runs/run-009/00_input.json \
+  --output agentic_graph/runs/run-009/repeatability_result.json
+```
+
+The command exits `0` only when both `deterministic_result` objects are exactly
+equal. It writes both results and `matches: true` to the requested report. It
+does not invoke `fix` or modify fixture source code. The output path is exclusive;
+remove or rename an existing report before intentionally repeating this check.
+
+## Run or resume the failed-gate/fix validation
 
 From the workspace root:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-008 \
+  --start test
+```
+
+Because `run-008/00_input.json` already names `test`, `--start test` is explicit
+but optional. The default dispatcher run directory is also `run-008`, so this is
+equivalent for a pristine run:
 
 ```bash
 python3 agentic_graph/dispatcher.py
 ```
 
-The default is equivalent to:
-
-```bash
-python3 agentic_graph/dispatcher.py \
-  --run-dir agentic_graph/runs/run-006
-```
-
-From inside `agentic_graph/`, this shorter command is equivalent:
-
-```bash
-python3 dispatcher.py
-```
-
-For a new run, `--start` is optional. When omitted, the dispatcher reads the
-initial node from `00_input.json`. If supplied on a new run, it must match that
-file's `next_node`. Once `manifest.json` exists, the checkpoint always controls
-resume and `--start` is ignored so it cannot accidentally rewind the run.
-
-Do not run nodes manually for the normal workflow. The dispatcher supplies their
-input and output paths and follows their persisted routing decisions.
-
-The first invocation stops after planning. Review and edit the generated file:
+The expected route is:
 
 ```text
-agentic_graph/runs/run-006/plan_review.md
+00_input.json
+-> 01_test.json       (passed)
+-> 02_review.json     (failed gate with Sonar findings)
+-> 03_fix.json        (removes the hard-coded credential)
+-> 04_test.json       (passed)
+-> 05_review.json     (passed gate)
+-> END
 ```
 
-Running the dispatcher repeatedly before approval leaves the run paused without
-rerunning `plan`. When satisfied, approve the current contents:
-
-```bash
-python3 agentic_graph/approve_plan.py \
-  --run-dir agentic_graph/runs/run-006
-```
-
-Then run the same dispatcher command again. It records the approved plan and
-continues at `code`; do not pass `--start code`.
+If interrupted, rerun the same dispatcher command. Once `manifest.json` exists,
+its checkpoint controls resume and `--start` is ignored. Do not run individual
+nodes for the normal workflow.
 
 ## Additional runs
 
-For another independent run, create another directory such as `run-007`, copy
+For another independent run, create another numbered directory, copy
 the prepared `00_input.json`, change `run_id`, and adjust the task or starting
 fixture state as needed. A test/fix loop stays entirely within its one run
 directory; the dispatcher does not create the next numbered directory.
@@ -373,10 +426,11 @@ unrecoverable scenario.
 
 ## Exit codes
 
-- `0`: workflow paused safely for approval, or reached `END` with passing tests.
+- `0`: workflow paused safely for approval, or reached `END` with passing tests
+  and a passing quality gate.
 - `1`: dispatcher or node contract error prevented completion.
-- `2`: workflow reached `give_up` because the fix limit was exhausted or the
-  test runner itself failed.
+- `2`: workflow reached `give_up` because the fix limit was exhausted or a
+  deterministic test/review dependency failed.
 - `130`: the dispatcher handled an interruption while a node was active.
 
 ## Non-agentic recovery tests
@@ -388,13 +442,14 @@ fixture:
 python3 -m unittest discover -s agentic_graph/tests -v
 ```
 
-These tests use temporary run directories and fake nodes. They cover fresh-run
-manifest creation, interrupted-node retry, orphan reconciliation and quarantine,
-exclusive locking, durable approval pauses, edited-plan propagation, and stale
-approval rejection.
+These tests use temporary run directories, fake nodes, and static Sonar payloads.
+They cover fresh-run manifest creation, interrupted-node retry, orphan
+reconciliation and quarantine, exclusive locking, durable approval pauses,
+edited-plan propagation, stale approval rejection, review routing, stable
+normalization, and review-triggered repair selection. They do not contact Sonar.
 
 ## Intentionally deferred
 
-Step 5 does not implement conversational plan revision, SonarQube review,
+Step 6 does not implement conversational plan revision, SonarQube MCP review,
 parallel candidates, or a rendered transition timeline. Those enhancements
 belong after the required challenge steps or in their later designated steps.

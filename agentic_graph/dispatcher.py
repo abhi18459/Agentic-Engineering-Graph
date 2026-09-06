@@ -39,7 +39,7 @@ from run_manifest import (
 )
 
 GRAPH_ROOT = Path(__file__).resolve().parent
-DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-006"
+DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-008"
 TERMINAL_NODES = {"END", "give_up"}
 CONTROL_NODES = {APPROVAL_NODE}
 
@@ -49,9 +49,15 @@ NODES: dict[str, Path] = {
     "code": GRAPH_ROOT / "nodes" / "code.py",
     "write": GRAPH_ROOT / "nodes" / "write.py",
     "test": GRAPH_ROOT / "nodes" / "test.py",
+    "review": GRAPH_ROOT / "nodes" / "review.py",
     "fix": GRAPH_ROOT / "nodes" / "fix.py",
 }
 ROUTABLE_NODES = set(NODES) | CONTROL_NODES | TERMINAL_NODES
+ENFORCED_TRANSITIONS: dict[str, set[str]] = {
+    "test": {"review", "fix", "give_up"},
+    "review": {"END", "fix", "give_up"},
+    "fix": {"test"},
+}
 
 
 class DispatchError(RuntimeError):
@@ -104,6 +110,7 @@ def validate_transition(
         "task",
         "fixture_path",
         "test_config",
+        "review_config",
         "max_iterations",
     ):
         if current.get(field) != previous.get(field):
@@ -128,6 +135,12 @@ def validate_transition(
     if next_node not in ROUTABLE_NODES:
         raise DispatchError(
             f"Refusing unknown next_node {next_node!r} in {output_path}"
+        )
+    allowed_next_nodes = ENFORCED_TRANSITIONS.get(node_name)
+    if allowed_next_nodes is not None and next_node not in allowed_next_nodes:
+        raise DispatchError(
+            f"Refusing invalid {node_name!r} transition to {next_node!r} "
+            f"in {output_path}"
         )
 
     workflow_status = current.get("workflow_status")
@@ -167,10 +180,13 @@ def validate_transition(
 
     for history_name, producing_node in (
         ("test_attempts", "test"),
+        ("review_attempts", "review"),
         ("fix_attempts", "fix"),
     ):
-        previous_history = previous.get(history_name)
-        current_history = current.get(history_name)
+        # review_attempts is additive in Step 6. Treat it as empty in preserved
+        # pre-Step-6 snapshots so completed historical runs remain readable.
+        previous_history = previous.get(history_name, [])
+        current_history = current.get(history_name, [])
         if not isinstance(previous_history, list) or not isinstance(
             current_history, list
         ):
@@ -554,7 +570,11 @@ def terminal_result(state: dict[str, Any], terminal: str, *, resumed: bool) -> i
     """Report a terminal checkpoint and return the workflow exit code."""
     prefix = "Workflow already at" if resumed else "Workflow reached"
     if terminal == "END":
-        print(f"{prefix} END: tests passed", flush=True)
+        if state.get("review_attempts"):
+            result = "tests and quality gate passed"
+        else:
+            result = "tests passed"
+        print(f"{prefix} END: {result}", flush=True)
         return 0
     reason = state.get("give_up_reason", "repair limit exhausted")
     print(f"{prefix} give_up: {reason}", file=sys.stderr, flush=True)
