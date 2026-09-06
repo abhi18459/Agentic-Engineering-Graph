@@ -1,0 +1,116 @@
+{
+  "schema_version": 2,
+  "run_id": "run-010",
+  "parent_run_id": "run-008",
+  "scenario": "sonarqube_mcp_gate_failure_and_fix",
+  "state_sequence": 1,
+  "task": {
+    "title": "Correct mismatched plot-data length validation",
+    "description": "Repair the deliberately incorrect same-length comparison in create_plot and satisfy pytest and the MCP-backed SonarQube quality gate.",
+    "requirements": [
+      "Make create_plot compare the lengths of x_data and y_data rather than comparing x_data with itself.",
+      "Raise a descriptive ValueError when the two data sequences have different lengths.",
+      "Add a focused pytest regression test for mismatched data lengths so the repaired validation branch remains covered.",
+      "Preserve the existing CSV validation, successful plotting behavior, and public API.",
+      "Do not change sonar-project.properties, quality-gate rules, analysis scope, or tests merely to suppress the finding."
+    ],
+    "acceptance_criteria": [
+      "The existing pytest suite passes before review.",
+      "The MCP-backed review records successful quality-gate, issue, and Security Hotspot tool calls.",
+      "The first SonarQube review reports a failed quality gate for the duplicated comparison.",
+      "The graph repairs the comparison and adds regression coverage.",
+      "The final tests and MCP-backed SonarQube quality gate pass.",
+      "No Sonar suppression or validation weakening is introduced."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "test",
+  "next_node": "review",
+  "status": "completed",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "--cov=starter_repo",
+      "--cov-report=term-missing",
+      "--cov-report=xml:coverage.xml"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "review_config": {
+    "backend": "sonarqube_mcp",
+    "command": [
+      "sonar-scanner"
+    ],
+    "quality_gate_timeout_seconds": 300,
+    "process_timeout_seconds": 360,
+    "mcp_process_timeout_seconds": 300,
+    "api_timeout_seconds": 30,
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8"
+    }
+  },
+  "outputs": {
+    "approval": {
+      "content": "Correct create_plot's duplicated length comparison so mismatched x_data and y_data raise a descriptive ValueError. Add a focused regression test that covers the error branch. Preserve the public API and existing behavior. Do not change or suppress SonarQube configuration; let the MCP-backed review verify the repair."
+    },
+    "code": {
+      "content": "The starting fixture deliberately checks len(x_data) against len(x_data), so unequal y_data is never rejected. Change the right-hand expression to len(y_data), retain the descriptive ValueError, and add a mismatched-length regression test."
+    },
+    "test": {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": ".............                                                            [100%]\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      45      2    96%   61, 96\n---------------------------------------------------------\nTOTAL                          46      2    96%\nCoverage XML written to file coverage.xml\n13 passed in 1.18s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  },
+  "test_attempts": [
+    {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": ".............                                                            [100%]\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      45      2    96%   61, 96\n---------------------------------------------------------\nTOTAL                          46      2    96%\nCoverage XML written to file coverage.xml\n13 passed in 1.18s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  ],
+  "review_attempts": [],
+  "fix_attempts": []
+}

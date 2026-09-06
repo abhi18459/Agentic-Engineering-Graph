@@ -57,7 +57,7 @@ def create_plot(
     Returns:
         matplotlib Figure object
     """
-    if len(x_data) != len(x_data):
+    if len(x_data) != len(y_data):
         raise ValueError("x_data and y_data must have the same length")
 
     fig, ax = plt.subplots()

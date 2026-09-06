@@ -128,6 +128,12 @@ def test_create_plot() -> None:
     assert ax.get_title() == "Test Plot"
 
 
+def test_create_plot_rejects_mismatched_data_lengths() -> None:
+    """Test that mismatched x and y data lengths are rejected."""
+    with pytest.raises(ValueError, match="^x_data and y_data must have the same length$"):
+        create_plot([1.0, 2.0], [3.0], "X", "Y", "Test Plot")
+
+
 def test_main_writes_plot_file(
     sample_csv: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
