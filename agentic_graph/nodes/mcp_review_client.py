@@ -330,6 +330,30 @@ def validate_agent_result(value: Any) -> dict[str, Any]:
     }
 
 
+def codex_review_command(
+    fixture: Path, schema_path: Path, final_path: Path
+) -> list[str]:
+    """Build a read-only Codex command that loads trusted project MCP config."""
+    return [
+        "codex",
+        "exec",
+        "--cd",
+        str(fixture),
+        "--sandbox",
+        "read-only",
+        "--ephemeral",
+        "--strict-config",
+        "--color",
+        "never",
+        "--json",
+        "--output-schema",
+        str(schema_path),
+        "--output-last-message",
+        str(final_path),
+        "-",
+    ]
+
+
 def scan_fields(scan: dict[str, Any]) -> dict[str, Any]:
     """Return the Step 6-compatible scanner and analysis provenance fields."""
     metadata = scan["metadata"]
@@ -441,25 +465,7 @@ def execute_sonar_mcp_review(
 
     prompt = template.replace("{{PROJECT_KEY}}", project_key)
     final_path = temporary_root / "agent-final.json"
-    agent_command = [
-        "codex",
-        "exec",
-        "--cd",
-        str(fixture),
-        "--sandbox",
-        "read-only",
-        "--ephemeral",
-        "--ignore-user-config",
-        "--strict-config",
-        "--color",
-        "never",
-        "--json",
-        "--output-schema",
-        str(schema_path),
-        "--output-last-message",
-        str(final_path),
-        "-",
-    ]
+    agent_command = codex_review_command(fixture, schema_path, final_path)
     secrets = tuple(secret for secret in (scanner_token, mcp_token) if secret)
     try:
         result = subprocess.run(

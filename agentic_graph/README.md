@@ -248,8 +248,8 @@ strict output schema and may query only these tools on the project-scoped
 The committed `.codex/config.toml` starts the official SonarQube MCP container
 with read-only mode enabled and forwards `SONARQUBE_TOKEN` and `SONARQUBE_ORG`
 from the invoking shell. It contains no credentials. User-level Codex
-configuration is ignored for this scoped agent invocation, while normal Codex
-authentication remains available.
+configuration and authentication remain available, and trusted repository-local
+configuration supplies the scoped MCP server for this invocation.
 
 The node captures Codex's JSONL event stream, rejects shell, file-change, and
 web-search events, and proves all three required MCP calls completed for the

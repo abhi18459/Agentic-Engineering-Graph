@@ -17,6 +17,7 @@ import review
 from common import NodeError
 from mcp_review_client import (
     McpReviewError,
+    codex_review_command,
     mcp_tool_calls,
     parse_jsonl,
     validate_agent_result,
@@ -92,6 +93,14 @@ class McpReviewConfigurationTest(unittest.TestCase):
                     }
                 }
             )
+
+    def test_agent_command_loads_trusted_project_mcp_configuration(self) -> None:
+        command = codex_review_command(
+            Path("fixture"), Path("schema.json"), Path("result.json")
+        )
+        self.assertNotIn("--ignore-user-config", command)
+        self.assertIn("--strict-config", command)
+        self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
 
 
 class McpProvenanceTest(unittest.TestCase):
