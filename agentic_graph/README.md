@@ -1,10 +1,11 @@
 # Agentic Engineering Graph
 
-This directory contains the Step 8 implementation for
+This directory contains the Step 9 implementation for
 [Coding Challenge #134](https://codingchallenges.substack.com/p/coding-challenge-134-agentic-engineering).
 It preserves the test/fix loop, crash recovery, and durable human plan approval,
 supports deterministic and MCP-backed SonarQube review gates, and can run
-isolated candidate implementations concurrently before selecting a winner:
+isolated candidate implementations concurrently before selecting a winner, and
+renders the resulting execution history as a timeline:
 
 ```text
 plan -> approval pause -> code -> write -> test --pass-> review --pass-> END
@@ -35,6 +36,7 @@ agentic_graph/
 ├── approval.py
 ├── approve_plan.py
 ├── run_manifest.py
+├── render_timeline.py
 ├── parallel_candidates.py
 ├── list_runs.py
 ├── verify_review_repeatability.py
@@ -63,7 +65,8 @@ agentic_graph/
 │   ├── test_step5_approval.py
 │   ├── test_step6_review.py
 │   ├── test_step7_mcp_review.py
-│   └── test_step8_parallel.py
+│   ├── test_step8_parallel.py
+│   └── test_step9_timeline.py
 └── runs/
     ├── run-001/          # Completed Step 2 evidence
     ├── run-002..004/     # Completed Step 3 evidence
@@ -72,7 +75,7 @@ agentic_graph/
     ├── run-008/          # Completed Step 6 failed-gate/fix evidence
     ├── run-009/          # Completed Step 6 repeatability evidence
     ├── run-010/          # Completed Step 7 MCP review validation
-    └── run-011/          # Prepared Step 8 parallel-candidate validation
+    └── run-011/          # Completed Step 8 parallel-candidate validation
 ```
 
 Nodes remain independently executable. They read one state snapshot, do their
@@ -89,6 +92,27 @@ terminal node.
 `run_manifest.py` is reusable program code beside the dispatcher. The actual
 manifest data is isolated inside its own run directory as `manifest.json`; runs
 never share a manifest.
+
+## Run timelines
+
+Every newly completed manifest attempt includes `duration_seconds`. The
+dispatcher measures ordinary attempts with a monotonic clock while retaining
+high-precision UTC start and completion timestamps. Recovered attempts use
+persisted wall-clock timestamps because a monotonic timer cannot cross a dead
+dispatcher process. Older manifests remain valid and can still be rendered.
+
+Print a run's Markdown timeline without changing it:
+
+```bash
+python3 agentic_graph/render_timeline.py \
+  --run-dir agentic_graph/runs/run-011
+```
+
+Use `--output <path>` to save the report. Parallel candidate timelines are
+included automatically; `--no-candidates` restricts output to the parent
+manifest. Repeated nodes remain separate rows in manifest attempt order, and
+failed or interrupted attempts retain their diagnostic errors. See
+`STEP_9_RUN_HISTORY.md` for the complete requirements and validation procedure.
 
 ## Dynamic snapshots
 
@@ -118,7 +142,7 @@ exposes partially written JSON.
 The dispatcher creates `manifest.json` before the first node starts. It records:
 
 - The last validated checkpoint state and its `next_node`.
-- Every node attempt with input/output filenames and timestamps.
+- Every node attempt with input/output filenames, timestamps, and elapsed time.
 - Whether each attempt is running, succeeded, failed, or interrupted.
 - Process exit codes and orchestration errors when available.
 - Recovery decisions for missing, reconciled, or quarantined outputs.
@@ -651,8 +675,12 @@ The Step 8 helper tests also use temporary directories only; they validate
 configuration bounds, child-state isolation, winner ranking, delta promotion,
 and concurrent-change protection.
 
+The Step 9 tests additionally cover monotonic dispatcher timing, repeated
+fix-loop timeline entries, failed-attempt diagnostics, historical manifest
+compatibility, and nested candidate rendering.
+
 ## Intentionally deferred
 
-Step 8 does not implement conversational plan revision or a rendered transition
-timeline. Timeline rendering belongs to Step 9; conversational plan revision is
-an optional enhancement after the required challenge steps.
+Conversational plan revision, token and cost accounting, automatic pull-request
+creation, and graph-diagram rendering are optional enhancements after the nine
+required challenge steps.

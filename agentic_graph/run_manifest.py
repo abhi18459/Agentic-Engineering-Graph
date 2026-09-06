@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import math
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -35,7 +36,31 @@ class RunLockedError(ManifestError):
 
 def utc_now() -> str:
     """Return an unambiguous, timezone-aware timestamp."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def elapsed_wall_time(started_at: str, completed_at: str) -> float | None:
+    """Return a non-negative wall-clock duration when both timestamps parse."""
+    try:
+        started = datetime.fromisoformat(started_at)
+        completed = datetime.fromisoformat(completed_at)
+    except (TypeError, ValueError):
+        return None
+    if started.tzinfo is None or completed.tzinfo is None:
+        return None
+    return round(max(0.0, (completed - started).total_seconds()), 6)
+
+
+def normalized_duration(value: float, attempt_id: int) -> float:
+    """Validate and normalize an elapsed duration before persisting it."""
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise ManifestError(f"Attempt {attempt_id} has an invalid duration")
+    return round(float(value), 6)
 
 
 def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
@@ -142,6 +167,22 @@ def validate_manifest(manifest: dict[str, Any], path: Path | None = None) -> Non
             raise ManifestError(
                 f"Completed manifest attempt {expected_id} has no completion time"
             )
+        duration = attempt.get("duration_seconds")
+        if "duration_seconds" in attempt:
+            if attempt["status"] == "running":
+                if duration is not None:
+                    raise ManifestError(
+                        f"Running manifest attempt {expected_id} has a duration"
+                    )
+            elif (
+                not isinstance(duration, (int, float))
+                or isinstance(duration, bool)
+                or not math.isfinite(duration)
+                or duration < 0
+            ):
+                raise ManifestError(
+                    f"Manifest attempt {expected_id} has an invalid duration"
+                )
         exit_code = attempt.get("exit_code")
         if exit_code is not None and (
             not isinstance(exit_code, int) or isinstance(exit_code, bool)
@@ -233,6 +274,7 @@ def start_attempt(
             "output_state": output_state,
             "started_at": utc_now(),
             "completed_at": None,
+            "duration_seconds": None,
             "status": "running",
             "exit_code": None,
             "next_node": None,
@@ -262,6 +304,7 @@ def complete_attempt(
     workflow_status: str,
     exit_code: int | None,
     recovered: bool = False,
+    duration_seconds: float | None = None,
 ) -> None:
     """Commit a validated node output as the run's newest checkpoint."""
     attempt = _attempt(manifest, attempt_id)
@@ -269,9 +312,15 @@ def complete_attempt(
         raise ManifestError(f"Attempt {attempt_id} cannot be completed twice")
     if attempt["output_state"] != output_state:
         raise ManifestError(f"Attempt {attempt_id} produced an unexpected snapshot")
+    completed_at = utc_now()
+    if duration_seconds is None:
+        duration_seconds = elapsed_wall_time(attempt["started_at"], completed_at)
+    if duration_seconds is None:
+        raise ManifestError(f"Could not determine duration for attempt {attempt_id}")
     attempt.update(
         {
-            "completed_at": utc_now(),
+            "completed_at": completed_at,
+            "duration_seconds": normalized_duration(duration_seconds, attempt_id),
             "status": "succeeded",
             "exit_code": exit_code,
             "next_node": next_node,
@@ -295,6 +344,7 @@ def finish_unsuccessful_attempt(
     status: str,
     error: str,
     exit_code: int | None,
+    duration_seconds: float | None = None,
 ) -> None:
     """Finish an attempt without advancing the trusted checkpoint."""
     if status not in {"failed", "interrupted"}:
@@ -302,9 +352,15 @@ def finish_unsuccessful_attempt(
     attempt = _attempt(manifest, attempt_id)
     if attempt["status"] != "running":
         raise ManifestError(f"Attempt {attempt_id} is not running")
+    completed_at = utc_now()
+    if duration_seconds is None:
+        duration_seconds = elapsed_wall_time(attempt["started_at"], completed_at)
+    if duration_seconds is None:
+        raise ManifestError(f"Could not determine duration for attempt {attempt_id}")
     attempt.update(
         {
-            "completed_at": utc_now(),
+            "completed_at": completed_at,
+            "duration_seconds": normalized_duration(duration_seconds, attempt_id),
             "status": status,
             "exit_code": exit_code,
             "error": error,

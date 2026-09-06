@@ -9,6 +9,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import FrameType
@@ -481,6 +482,7 @@ def process_approval_gate(
             f"Refusing to overwrite unhandled approval snapshot: {output_path}"
         )
 
+    attempt_started = time.monotonic()
     attempt_id = start_attempt(
         manifest,
         node=APPROVAL_NODE,
@@ -501,6 +503,7 @@ def process_approval_gate(
             status="failed",
             error=str(exc),
             exit_code=None,
+            duration_seconds=time.monotonic() - attempt_started,
         )
         write_manifest(manifest_path, manifest)
         if isinstance(exc, DispatchError):
@@ -515,6 +518,7 @@ def process_approval_gate(
         next_node=next_node,
         workflow_status=output_state["workflow_status"],
         exit_code=0,
+        duration_seconds=time.monotonic() - attempt_started,
     )
     write_manifest(manifest_path, manifest)
     print(f"Recorded human-approved plan in {output_path}", flush=True)
@@ -655,6 +659,7 @@ def dispatch_locked(
                 f"Refusing to overwrite unhandled state snapshot: {output_path}"
             )
 
+        attempt_started = time.monotonic()
         attempt_id = start_attempt(
             manifest,
             node=current_node,
@@ -682,6 +687,7 @@ def dispatch_locked(
                 status="interrupted",
                 error=str(exc),
                 exit_code=None,
+                duration_seconds=time.monotonic() - attempt_started,
             )
             write_manifest(manifest_path, manifest)
             print(
@@ -695,6 +701,7 @@ def dispatch_locked(
                 status="failed",
                 error=str(exc),
                 exit_code=None,
+                duration_seconds=time.monotonic() - attempt_started,
             )
             write_manifest(manifest_path, manifest)
             raise
@@ -707,6 +714,7 @@ def dispatch_locked(
                 status="failed",
                 error=message,
                 exit_code=return_code,
+                duration_seconds=time.monotonic() - attempt_started,
             )
             write_manifest(manifest_path, manifest)
             raise DispatchError(message)
@@ -723,6 +731,7 @@ def dispatch_locked(
                 status="failed",
                 error=str(exc),
                 exit_code=return_code,
+                duration_seconds=time.monotonic() - attempt_started,
             )
             write_manifest(manifest_path, manifest)
             raise
@@ -735,6 +744,7 @@ def dispatch_locked(
             next_node=next_node,
             workflow_status=output_state["workflow_status"],
             exit_code=return_code,
+            duration_seconds=time.monotonic() - attempt_started,
         )
         write_manifest(manifest_path, manifest)
         print(f"Wrote {output_path}", flush=True)
