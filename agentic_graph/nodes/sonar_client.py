@@ -249,18 +249,17 @@ def error_attempt(
     }
 
 
-def execute_sonar_review(
+def execute_sonar_scan(
     *,
     fixture: Path,
     base_command: list[str],
     quality_gate_timeout: int,
     process_timeout: float,
-    api_timeout: float,
     environment: dict[str, str],
     token: str,
     metadata_path: Path,
 ) -> dict[str, Any]:
-    """Run SonarScanner, query its exact analysis, and return a review attempt."""
+    """Run SonarScanner and return metadata without querying the Sonar Web API."""
     command = [
         *base_command,
         "-Dsonar.qualitygate.wait=true",
@@ -302,6 +301,54 @@ def execute_sonar_review(
 
     try:
         metadata = parse_report_task(metadata_path)
+    except SonarError as exc:
+        return error_attempt(
+            command=command,
+            exit_code=result.returncode,
+            stdout=stdout,
+            stderr=stderr,
+            error=str(exc),
+        )
+    return {
+        "scanner_exit_code": result.returncode,
+        "command": command,
+        "stdout": stdout,
+        "stderr": stderr,
+        "metadata": metadata,
+    }
+
+
+def execute_sonar_review(
+    *,
+    fixture: Path,
+    base_command: list[str],
+    quality_gate_timeout: int,
+    process_timeout: float,
+    api_timeout: float,
+    environment: dict[str, str],
+    token: str,
+    metadata_path: Path,
+) -> dict[str, Any]:
+    """Run SonarScanner, query its exact analysis, and return a review attempt."""
+    scan = execute_sonar_scan(
+        fixture=fixture,
+        base_command=base_command,
+        quality_gate_timeout=quality_gate_timeout,
+        process_timeout=process_timeout,
+        environment=environment,
+        token=token,
+        metadata_path=metadata_path,
+    )
+    if scan.get("result") == "scanner_error":
+        return scan
+
+    command = scan["command"]
+    scanner_exit_code = scan["scanner_exit_code"]
+    stdout = scan["stdout"]
+    stderr = scan["stderr"]
+    metadata = scan["metadata"]
+
+    try:
         ce_payload = api_json(metadata["ceTaskUrl"], token, api_timeout)
         task = ce_payload.get("task")
         if not isinstance(task, dict):
@@ -354,17 +401,17 @@ def execute_sonar_review(
     except SonarError as exc:
         return error_attempt(
             command=command,
-            exit_code=result.returncode,
+            exit_code=scanner_exit_code,
             stdout=stdout,
             stderr=stderr,
             error=str(exc),
         )
 
-    decision = "passed" if gate_status == "OK" and result.returncode == 0 else "failed"
-    if gate_status == "OK" and result.returncode != 0:
+    decision = "passed" if gate_status == "OK" and scanner_exit_code == 0 else "failed"
+    if gate_status == "OK" and scanner_exit_code != 0:
         return error_attempt(
             command=command,
-            exit_code=result.returncode,
+            exit_code=scanner_exit_code,
             stdout=stdout,
             stderr=stderr,
             error="SonarScanner failed even though the queried quality gate passed",
@@ -383,7 +430,7 @@ def execute_sonar_review(
         "conditions": conditions,
         "findings": findings,
         "deterministic_result": deterministic_result,
-        "scanner_exit_code": result.returncode,
+        "scanner_exit_code": scanner_exit_code,
         "command": command,
         "stdout": stdout,
         "stderr": stderr,

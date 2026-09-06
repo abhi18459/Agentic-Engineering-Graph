@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the deterministic SonarQube quality gate and branch on its result."""
+"""Run the selected SonarQube review backend and branch on its result."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from common import (
+    GRAPH_ROOT,
     NodeError,
     advance_state,
     node_parser,
@@ -17,7 +18,13 @@ from common import (
     resolve_fixture_path,
     write_state,
 )
+from mcp_review_client import MCP_BACKEND, execute_sonar_mcp_review
 from sonar_client import error_attempt, execute_sonar_review
+
+CLI_BACKEND = "sonar_cli"
+REVIEW_BACKENDS = {CLI_BACKEND, MCP_BACKEND}
+MCP_PROMPT = GRAPH_ROOT / "prompts" / "review_mcp.txt"
+MCP_OUTPUT_SCHEMA = GRAPH_ROOT / "schemas" / "review_mcp_output.schema.json"
 
 RESERVED_PROPERTY_KEYS = (
     "sonar.login",
@@ -39,7 +46,7 @@ def positive_number(value: Any, field: str) -> float:
 def review_configuration(
     state: dict[str, Any],
 ) -> tuple[list[str], int, float, float, dict[str, str]]:
-    """Validate and return deterministic Sonar review configuration."""
+    """Validate and return the shared Sonar review configuration."""
     config = state.get("review_config")
     if not isinstance(config, dict):
         raise NodeError("Input state must contain a review_config object")
@@ -84,13 +91,49 @@ def review_configuration(
         for key, value in raw_environment.items()
     ):
         raise NodeError("review_config.environment must map strings to strings")
-    if any(key.upper().startswith("SONAR_") for key in raw_environment):
+    if any(key.upper().startswith(("SONAR_", "SONARQUBE_")) for key in raw_environment):
         raise NodeError(
             "Sonar connection settings and credentials must be inherited from "
             "the process environment, not persisted in review_config"
         )
 
     return command, int(gate_timeout), process_timeout, api_timeout, raw_environment
+
+
+def review_backend(state: dict[str, Any]) -> str:
+    """Return a supported review backend, preserving Step 6 as the default."""
+    config = state.get("review_config")
+    if not isinstance(config, dict):
+        raise NodeError("Input state must contain a review_config object")
+    backend = config.get("backend", CLI_BACKEND)
+    if backend not in REVIEW_BACKENDS:
+        raise NodeError(
+            f"review_config.backend must be one of {sorted(REVIEW_BACKENDS)!r}"
+        )
+    return str(backend)
+
+
+def mcp_process_timeout(state: dict[str, Any]) -> float:
+    """Return the bounded timeout for one non-interactive MCP agent turn."""
+    config = state["review_config"]
+    return positive_number(
+        config.get("mcp_process_timeout_seconds", 300),
+        "mcp_process_timeout_seconds",
+    )
+
+
+def missing_environment_attempt(
+    command: list[str], backend: str, names: list[str]
+) -> dict[str, Any]:
+    """Return a terminal configuration error without exposing secret values."""
+    attempt = error_attempt(
+        command=command,
+        error=f"Required review environment variable(s) are not set: {', '.join(names)}",
+    )
+    if backend == MCP_BACKEND:
+        attempt["result"] = "agent_error"
+    attempt["review_backend"] = backend
+    return attempt
 
 
 def review_route(
@@ -111,7 +154,7 @@ def review_route(
     return (
         "give_up",
         "error",
-        str(attempt.get("error", "SonarScanner or the Sonar API failed")),
+        str(attempt.get("error", "Sonar review infrastructure failed")),
     )
 
 
@@ -123,6 +166,7 @@ def main() -> int:
         if not isinstance(review_attempts, list):
             raise NodeError("Input state must contain a review_attempts array")
         fixture = resolve_fixture_path(state, args.input_state)
+        backend = review_backend(state)
         command, gate_timeout, process_timeout, api_timeout, overrides = (
             review_configuration(state)
         )
@@ -131,25 +175,50 @@ def main() -> int:
         token = environment.get("SONAR_TOKEN", "").strip()
 
         if not token:
-            attempt = error_attempt(
-                command=command,
-                error="SONAR_TOKEN is not set in the review node environment",
-            )
+            attempt = missing_environment_attempt(command, backend, ["SONAR_TOKEN"])
+        elif backend == MCP_BACKEND and not all(
+            environment.get(name, "").strip()
+            for name in ("SONARQUBE_TOKEN", "SONARQUBE_ORG")
+        ):
+            missing = [
+                name
+                for name in ("SONARQUBE_TOKEN", "SONARQUBE_ORG")
+                if not environment.get(name, "").strip()
+            ]
+            attempt = missing_environment_attempt(command, backend, missing)
         else:
             output_parent = args.output_state.resolve().parent
             with tempfile.TemporaryDirectory(
                 dir=output_parent, prefix=".sonar-review-"
             ) as temporary:
-                attempt = execute_sonar_review(
-                    fixture=fixture,
-                    base_command=command,
-                    quality_gate_timeout=gate_timeout,
-                    process_timeout=process_timeout,
-                    api_timeout=api_timeout,
-                    environment=environment,
-                    token=token,
-                    metadata_path=Path(temporary) / "report-task.txt",
-                )
+                temporary_root = Path(temporary)
+                if backend == CLI_BACKEND:
+                    attempt = execute_sonar_review(
+                        fixture=fixture,
+                        base_command=command,
+                        quality_gate_timeout=gate_timeout,
+                        process_timeout=process_timeout,
+                        api_timeout=api_timeout,
+                        environment=environment,
+                        token=token,
+                        metadata_path=temporary_root / "report-task.txt",
+                    )
+                else:
+                    attempt = execute_sonar_mcp_review(
+                        fixture=fixture,
+                        base_command=command,
+                        quality_gate_timeout=gate_timeout,
+                        scanner_timeout=process_timeout,
+                        agent_timeout=mcp_process_timeout(state),
+                        environment=environment,
+                        scanner_token=token,
+                        mcp_token=environment["SONARQUBE_TOKEN"].strip(),
+                        temporary_root=temporary_root,
+                        prompt_path=MCP_PROMPT,
+                        schema_path=MCP_OUTPUT_SCHEMA,
+                    )
+
+        attempt.setdefault("review_backend", backend)
 
         attempt["attempt"] = len(review_attempts) + 1
         attempt["fix_iteration"] = state["iteration"]

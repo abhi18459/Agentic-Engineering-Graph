@@ -1,0 +1,31 @@
+[mcp_servers.sonarqube]
+command = "docker"
+args = [
+  "run",
+  "--init",
+  "--rm",
+  "-i",
+  "-e",
+  "SONARQUBE_TOKEN",
+  "-e",
+  "SONARQUBE_ORG",
+  "-e",
+  "SONARQUBE_TOOLSETS",
+  "-e",
+  "SONARQUBE_READ_ONLY",
+  "sonarsource/sonarqube-mcp",
+]
+env_vars = ["SONARQUBE_TOKEN", "SONARQUBE_ORG"]
+required = true
+startup_timeout_sec = 120
+tool_timeout_sec = 60
+enabled_tools = [
+  "get_project_quality_gate_status",
+  "search_sonar_issues_in_projects",
+  "search_security_hotspots",
+]
+default_tools_approval_mode = "auto"
+
+[mcp_servers.sonarqube.env]
+SONARQUBE_TOOLSETS = "issues,quality-gates,security-hotspots"
+SONARQUBE_READ_ONLY = "true"

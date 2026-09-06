@@ -39,7 +39,7 @@ from run_manifest import (
 )
 
 GRAPH_ROOT = Path(__file__).resolve().parent
-DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-008"
+DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-010"
 TERMINAL_NODES = {"END", "give_up"}
 CONTROL_NODES = {APPROVAL_NODE}
 

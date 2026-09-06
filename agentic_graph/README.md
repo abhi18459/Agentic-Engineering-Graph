@@ -1,9 +1,9 @@
 # Agentic Engineering Graph
 
-This directory contains the Step 6 implementation for
+This directory contains the Step 7 implementation for
 [Coding Challenge #134](https://codingchallenges.substack.com/p/coding-challenge-134-agentic-engineering).
 It preserves the test/fix loop, crash recovery, and durable human plan approval,
-and adds a deterministic SonarQube review gate:
+and supports both deterministic and MCP-backed SonarQube review gates:
 
 ```text
 plan -> approval pause -> code -> write -> test --pass-> review --pass-> END
@@ -40,23 +40,29 @@ agentic_graph/
 │   ├── test.py
 │   ├── review.py
 │   ├── sonar_client.py
+│   ├── mcp_review_client.py
 │   └── fix.py
 ├── prompts/
 │   ├── plan.txt
 │   ├── code.txt
 │   ├── write.txt
+│   ├── review_mcp.txt
 │   └── fix.txt
+├── schemas/
+│   └── review_mcp_output.schema.json
 ├── tests/
 │   ├── test_step4_recovery.py
 │   ├── test_step5_approval.py
-│   └── test_step6_review.py
+│   ├── test_step6_review.py
+│   └── test_step7_mcp_review.py
 └── runs/
     ├── run-001/          # Completed Step 2 evidence
     ├── run-002..004/     # Completed Step 3 evidence
     ├── run-005/          # Completed Step 4 evidence
     ├── run-006..007/     # Completed Step 5 evidence
-    ├── run-008/          # Prepared failed-gate/fix validation
-    └── run-009/          # Prepared repeatability input
+    ├── run-008/          # Completed Step 6 failed-gate/fix evidence
+    ├── run-009/          # Completed Step 6 repeatability evidence
+    └── run-010/          # Prepared Step 7 MCP review validation
 ```
 
 Nodes remain independently executable. They read one state snapshot, do their
@@ -142,7 +148,8 @@ The graph state continues to use `schema_version: 2`. Its core fields are:
 - `iteration`: number of completed fix attempts.
 - `max_iterations`: maximum permitted fix attempts.
 - `test_config`: deterministic command, timeout, environment, and exit-code policy.
-- `review_config`: scanner command plus quality-gate, process, and API timeouts.
+- `review_config`: selected backend, scanner command, and bounded scanner,
+  quality-gate, API, and MCP-agent timeouts.
 - `outputs`: latest output from each node, for convenient access.
 - `test_attempts`: ordered history of every test execution.
 - `review_attempts`: ordered history of every SonarQube review.
@@ -221,6 +228,41 @@ The `deterministic_result` object deliberately excludes timestamps, durations,
 analysis/task IDs, URLs, and raw logs. Findings are normalized and sorted by
 their stable content.
 
+## MCP-backed SonarQube review
+
+`review_config.backend` selects the review implementation. Existing runs omit
+the field and continue to use `sonar_cli`; Step 7 uses `sonarqube_mcp`. The
+dispatcher still executes the same logical `review` node and validates the same
+state transition either way.
+
+The MCP path first runs SonarScanner with the same bounded quality-gate wait so
+SonarQube contains a current analysis. It then invokes `codex exec`
+non-interactively, ephemerally, and in a read-only sandbox. Codex receives a
+strict output schema and may query only these tools on the project-scoped
+`sonarqube` MCP server:
+
+- `get_project_quality_gate_status`
+- `search_sonar_issues_in_projects`
+- `search_security_hotspots`
+
+The committed `.codex/config.toml` starts the official SonarQube MCP container
+with read-only mode enabled and forwards `SONARQUBE_TOKEN` and `SONARQUBE_ORG`
+from the invoking shell. It contains no credentials. User-level Codex
+configuration is ignored for this scoped agent invocation, while normal Codex
+authentication remains available.
+
+The node captures Codex's JSONL event stream, rejects shell, file-change, and
+web-search events, and proves all three required MCP calls completed for the
+scanner-reported project key. A model assertion that it used MCP is not accepted
+as evidence. The final response must also pass the committed JSON Schema and
+local consistency validation before it can affect routing.
+
+Successful MCP attempts retain the Step 6 decision fields and normalized
+findings. Backend-specific provenance is stored under `review_backend`,
+`agent_cli`, `mcp_server`, and `mcp_tool_calls`. Scanner, Codex, MCP,
+provenance, or structured-output failures route to `give_up` as infrastructure
+errors rather than consuming a repair iteration.
+
 ## Human plan approval
 
 After `plan.py` writes the immutable `01_plan.json`, the dispatcher creates
@@ -288,12 +330,8 @@ python3 agentic_graph/dispatcher.py \
 ```
 
 Because `run-008/00_input.json` already names `test`, `--start test` is explicit
-but optional. The default dispatcher run directory is also `run-008`, so this is
-equivalent for a pristine run:
-
-```bash
-python3 agentic_graph/dispatcher.py
-```
+but optional. Keep `--run-dir` when referring to this historical Step 6 run;
+the dispatcher's current default is the Step 7 `run-010` setup.
 
 The expected route is:
 
@@ -310,6 +348,51 @@ The expected route is:
 If interrupted, rerun the same dispatcher command. Once `manifest.json` exists,
 its checkpoint controls resume and `--start` is ignored. Do not run individual
 nodes for the normal workflow.
+
+## Run the Step 7 MCP-backed validation
+
+The prepared `run-010` setup reintroduces the same duplicated-comparison issue
+used for Step 6 and removes the regression that would otherwise stop execution
+at the test node. The initial tests should therefore pass while SonarQube still
+detects the reliability issue.
+
+In the same terminal that starts the dispatcher, provide scanner and MCP
+credentials without printing them:
+
+```bash
+export SONARQUBE_TOKEN="$SONAR_TOKEN"
+export SONARQUBE_ORG="abhi18459"
+```
+
+Docker Desktop must be running, and Codex CLI must already be authenticated.
+Then run from the workspace root:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-010 \
+  --start test
+```
+
+Because `run-010` is the default and its input names `test`, a pristine run is
+also equivalent to `python3 agentic_graph/dispatcher.py`. The explicit form is
+preferred for auditable validation.
+
+The expected route is:
+
+```text
+00_input.json
+-> 01_test.json       (passed)
+-> 02_review.json     (MCP calls recorded; quality gate failed)
+-> 03_fix.json        (comparison and regression coverage repaired)
+-> 04_test.json       (passed)
+-> 05_review.json     (MCP calls recorded; quality gate passed)
+-> END
+```
+
+Inspect both review snapshots after completion. Each `mcp_tool_calls` array must
+show successful calls to the quality-gate, issue-search, and hotspot-search
+tools for `agentic-engineering-fixture`. The first decision should match the
+recorded failed Step 6 gate, and the final decision should be `passed`.
 
 ## Additional runs
 
@@ -436,7 +519,7 @@ unrecoverable scenario.
   and a passing quality gate.
 - `1`: dispatcher or node contract error prevented completion.
 - `2`: workflow reached `give_up` because the fix limit was exhausted or a
-  deterministic test/review dependency failed.
+  test/review dependency failed.
 - `130`: the dispatcher handled an interruption while a node was active.
 
 ## Non-agentic recovery tests
@@ -452,10 +535,11 @@ These tests use temporary run directories, fake nodes, and static Sonar payloads
 They cover fresh-run manifest creation, interrupted-node retry, orphan
 reconciliation and quarantine, exclusive locking, durable approval pauses,
 edited-plan propagation, stale approval rejection, review routing, stable
-normalization, and review-triggered repair selection. They do not contact Sonar.
+normalization, MCP provenance validation, structured review output, and
+review-triggered repair selection. They do not contact Sonar or Docker.
 
 ## Intentionally deferred
 
-Step 6 does not implement conversational plan revision, SonarQube MCP review,
-parallel candidates, or a rendered transition timeline. Those enhancements
-belong after the required challenge steps or in their later designated steps.
+Step 7 does not implement conversational plan revision, parallel candidates, or
+a rendered transition timeline. Those enhancements belong after the required
+challenge steps or in their later designated steps.

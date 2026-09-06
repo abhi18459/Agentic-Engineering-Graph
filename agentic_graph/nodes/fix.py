@@ -51,6 +51,22 @@ def latest_repairable_failure(
     return trigger_node, attempt
 
 
+def repair_context(trigger_node: str, attempt: dict[str, Any]) -> dict[str, Any]:
+    """Keep repair evidence while omitting bulky review transport diagnostics."""
+    if trigger_node != "review":
+        return attempt
+    fields = (
+        "attempt",
+        "result",
+        "quality_gate_status",
+        "conditions",
+        "findings",
+        "error",
+        "review_backend",
+    )
+    return {field: attempt[field] for field in fields if field in attempt}
+
+
 def main() -> int:
     args = node_parser("fix", DEFAULT_PROMPT).parse_args()
     try:
@@ -70,7 +86,7 @@ def main() -> int:
             f"## Human-approved plan\n\n{plan}\n\n"
             f"## Previous code proposal\n\n{previous_code}\n\n"
             f"## Repair trigger\n\nNode: {trigger_node}\n\n"
-            f"{json.dumps(failure, indent=2, ensure_ascii=False)}\n\n"
+            f"{json.dumps(repair_context(trigger_node, failure), indent=2, ensure_ascii=False)}\n\n"
             f"## Earlier fix attempts\n\n{prior_fixes}\n"
         )
         fix_result = invoke_codex(fixture, prompt, "workspace-write")

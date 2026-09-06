@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["passed", "failed"]
+    },
+    "quality_gate_status": {
+      "type": "string",
+      "enum": ["OK", "ERROR"]
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": {"type": "string"},
+          "comparator": {"type": "string"},
+          "error_threshold": {"type": "string"},
+          "actual_value": {"type": "string"},
+          "status": {"type": "string"}
+        },
+        "required": [
+          "metric",
+          "comparator",
+          "error_threshold",
+          "actual_value",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/issue"
+          },
+          {
+            "$ref": "#/$defs/securityHotspot"
+          }
+        ]
+      }
+    }
+  },
+  "required": ["decision", "quality_gate_status", "conditions", "findings"],
+  "additionalProperties": false,
+  "$defs": {
+    "impact": {
+      "type": "object",
+      "properties": {
+        "software_quality": {"type": "string"},
+        "severity": {"type": "string"}
+      },
+      "required": ["software_quality", "severity"],
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["issue"]},
+        "rule": {"type": "string"},
+        "type": {"type": "string"},
+        "severity": {"type": "string"},
+        "impacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/impact"}
+        },
+        "file": {"type": "string"},
+        "line": {"type": ["integer", "null"]},
+        "message": {"type": "string"},
+        "status": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "required": [
+        "kind",
+        "rule",
+        "type",
+        "severity",
+        "impacts",
+        "file",
+        "line",
+        "message",
+        "status",
+        "tags"
+      ],
+      "additionalProperties": false
+    },
+    "securityHotspot": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["security_hotspot"]},
+        "rule": {"type": "string"},
+        "security_category": {"type": "string"},
+        "type": {"type": "string", "enum": ["SECURITY_HOTSPOT"]},
+        "severity": {"type": "string"},
+        "impacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/impact"}
+        },
+        "file": {"type": "string"},
+        "line": {"type": ["integer", "null"]},
+        "message": {"type": "string"},
+        "status": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "required": [
+        "kind",
+        "rule",
+        "security_category",
+        "type",
+        "severity",
+        "impacts",
+        "file",
+        "line",
+        "message",
+        "status",
+        "tags"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
