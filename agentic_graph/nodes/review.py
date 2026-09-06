@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -136,6 +139,51 @@ def missing_environment_attempt(
     return attempt
 
 
+@contextmanager
+def review_serialization_lock(
+    state: dict[str, Any], input_path: Path
+) -> Iterator[None]:
+    """Serialize a complete scan/query cycle when candidates share a project key."""
+    config = state["review_config"]
+    raw_path = config.get("serialization_lock")
+    if raw_path is None:
+        yield
+        return
+    if not isinstance(raw_path, str) or not raw_path:
+        raise NodeError("review_config.serialization_lock must be a relative path")
+    relative = Path(raw_path)
+    if relative.is_absolute():
+        raise NodeError("review_config.serialization_lock must be a relative path")
+
+    run_dir = input_path.resolve().parent
+    candidates_root = run_dir.parent.resolve()
+    lock_path = (run_dir / relative).resolve()
+    if lock_path.parent != candidates_root or lock_path.name != ".sonar-review.lock":
+        raise NodeError(
+            "review_config.serialization_lock must resolve to ../.sonar-review.lock"
+        )
+    try:
+        handle = lock_path.open("a+", encoding="utf-8")
+    except OSError as exc:
+        raise NodeError(
+            f"Could not use Sonar review serialization lock: {exc}"
+        ) from exc
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    except OSError as exc:
+        handle.close()
+        raise NodeError(
+            f"Could not use Sonar review serialization lock: {exc}"
+        ) from exc
+    try:
+        yield
+    finally:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
+
 def review_route(
     state: dict[str, Any], attempt: dict[str, Any]
 ) -> tuple[str, str, str | None]:
@@ -187,36 +235,37 @@ def main() -> int:
             ]
             attempt = missing_environment_attempt(command, backend, missing)
         else:
-            output_parent = args.output_state.resolve().parent
-            with tempfile.TemporaryDirectory(
-                dir=output_parent, prefix=".sonar-review-"
-            ) as temporary:
-                temporary_root = Path(temporary)
-                if backend == CLI_BACKEND:
-                    attempt = execute_sonar_review(
-                        fixture=fixture,
-                        base_command=command,
-                        quality_gate_timeout=gate_timeout,
-                        process_timeout=process_timeout,
-                        api_timeout=api_timeout,
-                        environment=environment,
-                        token=token,
-                        metadata_path=temporary_root / "report-task.txt",
-                    )
-                else:
-                    attempt = execute_sonar_mcp_review(
-                        fixture=fixture,
-                        base_command=command,
-                        quality_gate_timeout=gate_timeout,
-                        scanner_timeout=process_timeout,
-                        agent_timeout=mcp_process_timeout(state),
-                        environment=environment,
-                        scanner_token=token,
-                        mcp_token=environment["SONARQUBE_TOKEN"].strip(),
-                        temporary_root=temporary_root,
-                        prompt_path=MCP_PROMPT,
-                        schema_path=MCP_OUTPUT_SCHEMA,
-                    )
+            with review_serialization_lock(state, args.input_state):
+                output_parent = args.output_state.resolve().parent
+                with tempfile.TemporaryDirectory(
+                    dir=output_parent, prefix=".sonar-review-"
+                ) as temporary:
+                    temporary_root = Path(temporary)
+                    if backend == CLI_BACKEND:
+                        attempt = execute_sonar_review(
+                            fixture=fixture,
+                            base_command=command,
+                            quality_gate_timeout=gate_timeout,
+                            process_timeout=process_timeout,
+                            api_timeout=api_timeout,
+                            environment=environment,
+                            token=token,
+                            metadata_path=temporary_root / "report-task.txt",
+                        )
+                    else:
+                        attempt = execute_sonar_mcp_review(
+                            fixture=fixture,
+                            base_command=command,
+                            quality_gate_timeout=gate_timeout,
+                            scanner_timeout=process_timeout,
+                            agent_timeout=mcp_process_timeout(state),
+                            environment=environment,
+                            scanner_token=token,
+                            mcp_token=environment["SONARQUBE_TOKEN"].strip(),
+                            temporary_root=temporary_root,
+                            prompt_path=MCP_PROMPT,
+                            schema_path=MCP_OUTPUT_SCHEMA,
+                        )
 
         attempt.setdefault("review_backend", backend)
 

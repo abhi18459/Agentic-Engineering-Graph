@@ -39,7 +39,7 @@ from run_manifest import (
 )
 
 GRAPH_ROOT = Path(__file__).resolve().parent
-DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-010"
+DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-011"
 TERMINAL_NODES = {"END", "give_up"}
 CONTROL_NODES = {APPROVAL_NODE}
 
@@ -51,12 +51,17 @@ NODES: dict[str, Path] = {
     "test": GRAPH_ROOT / "nodes" / "test.py",
     "review": GRAPH_ROOT / "nodes" / "review.py",
     "fix": GRAPH_ROOT / "nodes" / "fix.py",
+    "fan_out": GRAPH_ROOT / "nodes" / "fan_out.py",
+    "join": GRAPH_ROOT / "nodes" / "join.py",
 }
 ROUTABLE_NODES = set(NODES) | CONTROL_NODES | TERMINAL_NODES
 ENFORCED_TRANSITIONS: dict[str, set[str]] = {
+    APPROVAL_NODE: {"code", "fan_out"},
     "test": {"review", "fix", "give_up"},
     "review": {"END", "fix", "give_up"},
     "fix": {"test"},
+    "fan_out": {"join"},
+    "join": {"END", "give_up"},
 }
 
 
@@ -112,6 +117,7 @@ def validate_transition(
         "test_config",
         "review_config",
         "max_iterations",
+        "parallel_config",
     ):
         if current.get(field) != previous.get(field):
             raise DispatchError(f"{output_path} changed immutable field {field!r}")
@@ -570,7 +576,12 @@ def terminal_result(state: dict[str, Any], terminal: str, *, resumed: bool) -> i
     """Report a terminal checkpoint and return the workflow exit code."""
     prefix = "Workflow already at" if resumed else "Workflow reached"
     if terminal == "END":
-        if state.get("review_attempts"):
+        if state.get("selected_candidate"):
+            result = (
+                f"selected {state['selected_candidate']} after parallel tests "
+                "and quality review"
+            )
+        elif state.get("review_attempts"):
             result = "tests and quality gate passed"
         else:
             result = "tests passed"

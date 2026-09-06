@@ -197,7 +197,9 @@ def approved_state(
     updated = copy.deepcopy(state)
     updated["state_sequence"] += 1
     updated["current_node"] = APPROVAL_NODE
-    updated["next_node"] = "code"
+    updated["next_node"] = (
+        "fan_out" if isinstance(state.get("parallel_config"), dict) else "code"
+    )
     updated["status"] = "completed"
     updated["workflow_status"] = "running"
     updated["outputs"][APPROVAL_NODE] = {

@@ -1,9 +1,10 @@
 # Agentic Engineering Graph
 
-This directory contains the Step 7 implementation for
+This directory contains the Step 8 implementation for
 [Coding Challenge #134](https://codingchallenges.substack.com/p/coding-challenge-134-agentic-engineering).
 It preserves the test/fix loop, crash recovery, and durable human plan approval,
-and supports both deterministic and MCP-backed SonarQube review gates:
+supports deterministic and MCP-backed SonarQube review gates, and can run
+isolated candidate implementations concurrently before selecting a winner:
 
 ```text
 plan -> approval pause -> code -> write -> test --pass-> review --pass-> END
@@ -14,6 +15,10 @@ plan -> approval pause -> code -> write -> test --pass-> review --pass-> END
                                                        review <- test <-+
 
 test/review --limit or infrastructure error-----------------------> give_up
+
+approved plan -> fan_out -> candidate-01 --+
+                         -> candidate-02 ---+-> join -> END/give_up
+                         -> candidate-03 --+
 ```
 
 Every `fix` invocation edits the same fixture working tree left by `write` and
@@ -30,6 +35,7 @@ agentic_graph/
 ├── approval.py
 ├── approve_plan.py
 ├── run_manifest.py
+├── parallel_candidates.py
 ├── list_runs.py
 ├── verify_review_repeatability.py
 ├── nodes/
@@ -41,7 +47,9 @@ agentic_graph/
 │   ├── review.py
 │   ├── sonar_client.py
 │   ├── mcp_review_client.py
-│   └── fix.py
+│   ├── fix.py
+│   ├── fan_out.py
+│   └── join.py
 ├── prompts/
 │   ├── plan.txt
 │   ├── code.txt
@@ -54,7 +62,8 @@ agentic_graph/
 │   ├── test_step4_recovery.py
 │   ├── test_step5_approval.py
 │   ├── test_step6_review.py
-│   └── test_step7_mcp_review.py
+│   ├── test_step7_mcp_review.py
+│   └── test_step8_parallel.py
 └── runs/
     ├── run-001/          # Completed Step 2 evidence
     ├── run-002..004/     # Completed Step 3 evidence
@@ -62,7 +71,8 @@ agentic_graph/
     ├── run-006..007/     # Completed Step 5 evidence
     ├── run-008/          # Completed Step 6 failed-gate/fix evidence
     ├── run-009/          # Completed Step 6 repeatability evidence
-    └── run-010/          # Prepared Step 7 MCP review validation
+    ├── run-010/          # Completed Step 7 MCP review validation
+    └── run-011/          # Prepared Step 8 parallel-candidate validation
 ```
 
 Nodes remain independently executable. They read one state snapshot, do their
@@ -72,7 +82,9 @@ The dispatcher owns control flow. It maps trusted node names to scripts, derives
 the next immutable filename from `state_sequence`, runs the selected node,
 validates the transition, records it in the run manifest, pauses at `approval`,
 and stops at `END` or `give_up`. A run reaches `END` only after both tests and
-SonarQube review pass.
+SonarQube review pass. For a parallel parent, `fan_out` starts child dispatchers
+and `join` independently validates their evidence before the parent reaches a
+terminal node.
 
 `run_manifest.py` is reusable program code beside the dispatcher. The actual
 manifest data is isolated inside its own run directory as `manifest.json`; runs
@@ -154,6 +166,12 @@ The graph state continues to use `schema_version: 2`. Its core fields are:
 - `test_attempts`: ordered history of every test execution.
 - `review_attempts`: ordered history of every SonarQube review.
 - `fix_attempts`: ordered history of every Codex repair.
+- `parallel_config`: optional bounded candidate count, ranking rule, and explicit
+  per-candidate validation constraints for a parallel parent run.
+- `candidate_results`: parent summary of independently validated child terminal
+  states, added by `fan_out`.
+- `selected_candidate`: winning candidate ID, added only after successful
+  promotion by `join`.
 
 `iteration` counts fixes, not tests. With `max_iterations: 3`, the graph performs
 an initial test and permits at most three agentic repair attempts.
@@ -331,7 +349,7 @@ python3 agentic_graph/dispatcher.py \
 
 Because `run-008/00_input.json` already names `test`, `--start test` is explicit
 but optional. Keep `--run-dir` when referring to this historical Step 6 run;
-the dispatcher's current default is the Step 7 `run-010` setup.
+the dispatcher's current default is the Step 8 `run-011` setup.
 
 The expected route is:
 
@@ -373,9 +391,8 @@ python3 agentic_graph/dispatcher.py \
   --start test
 ```
 
-Because `run-010` is the default and its input names `test`, a pristine run is
-also equivalent to `python3 agentic_graph/dispatcher.py`. The explicit form is
-preferred for auditable validation.
+`run-010` is historical evidence and is no longer the dispatcher default. Keep
+the explicit `--run-dir` when inspecting or resuming that run.
 
 The expected route is:
 
@@ -393,6 +410,92 @@ Inspect both review snapshots after completion. Each `mcp_tool_calls` array must
 show successful calls to the quality-gate, issue-search, and hotspot-search
 tools for `agentic-engineering-fixture`. The first decision should match the
 recorded failed Step 6 gate, and the final decision should be `passed`.
+
+## Parallel candidates and deterministic join
+
+Step 8 adds `fan_out` and `join` as ordinary parent-graph nodes. `fan_out`
+snapshots the current canonical fixture into `run-011/baseline/`, creates one
+child under `run-011/candidates/` for every configured candidate, and starts all
+child dispatchers before waiting for any of them. Each child starts at `code`
+with the same task and approved plan, but receives its own `workspace/`, state
+snapshots, manifest, and repair history.
+
+The child workspaces omit `.venv` and generated tool output. Test commands that
+refer to files in the canonical fixture are converted to absolute paths before
+the child starts, so every candidate can reuse the existing Python environment
+without copying it. Source imports and test/coverage output still use the child
+workspace because each test process runs there.
+
+The candidates share one configured SonarQube project key. The review node
+therefore supports a narrowly constrained `../.sonar-review.lock`: it locks the
+entire scanner-and-MCP-query cycle, ensuring that another candidate cannot
+replace the project's current analysis between scanning and collecting its
+result. Code generation, writing, testing, and repairs remain concurrent.
+
+After all child dispatchers finish, `join` reloads their manifests and terminal
+checkpoints rather than trusting the fan-out summary alone. It excludes any
+candidate without a passing latest test and `OK` Sonar quality gate, then ranks
+eligible candidates by:
+
+1. Fewest Sonar findings.
+2. Fewest fix iterations.
+3. Candidate ID.
+
+Before promotion, `join` verifies the canonical fixture still matches the
+captured baseline. This prevents an external edit made during the parallel run
+from being overwritten. Managed files changed, added, or deleted by the winner
+are then reflected in the canonical fixture; virtual environments, caches,
+coverage data, scanner output, and child logs are never promoted.
+
+The baseline and candidate workspaces are ignored by Git. Child state snapshots
+and manifests remain visible so the parallel decision is auditable. If the
+parent is interrupted, rerunning it reuses those child directories: completed
+children remain terminal and incomplete child manifests resume through the
+existing dispatcher recovery rules. The parent wait is bounded to one hour by
+default through `parallel_config.candidate_wait_timeout_seconds`; timing out
+does not delete or overwrite child evidence.
+
+## Run the Step 8 parallel validation
+
+`run-011` starts directly at `fan_out` with a seeded approved plan and three
+candidates. Candidates 1 and 2 independently implement non-finite plot-data
+validation. Candidate 3 uses the real pytest suite followed by the existing
+external failure harness and has one repair attempt, so its workspace cannot
+make that external condition pass and `join` must exclude it.
+
+Docker Desktop and Codex CLI authentication must be ready. In the terminal that
+will run the dispatcher, provide scanner and MCP credentials without printing
+them:
+
+```bash
+export SONARQUBE_TOKEN="$SONAR_TOKEN"
+export SONARQUBE_ORG="abhi18459"
+```
+
+Then run from the workspace root:
+
+```bash
+python3 agentic_graph/dispatcher.py \
+  --run-dir agentic_graph/runs/run-011 \
+  --start fan_out
+```
+
+The expected parent route is:
+
+```text
+00_input.json
+-> 01_fan_out.json   (three child terminal results)
+-> 02_join.json      (candidate-03 excluded; valid winner promoted)
+-> END
+```
+
+Candidate 1 and candidate 2 should each reach `END`, although a genuine
+implementation failure may instead exercise their own fix loop. Candidate 3
+should reach `give_up`. `02_join.json` records every exclusion, the winner's
+ranking values, and the exact managed files promoted to `fixture/`.
+
+If interrupted, rerun the exact same dispatcher command. Once the parent
+manifest exists, its checkpoint controls resume and `--start` is ignored.
 
 ## Additional runs
 
@@ -538,8 +641,12 @@ edited-plan propagation, stale approval rejection, review routing, stable
 normalization, MCP provenance validation, structured review output, and
 review-triggered repair selection. They do not contact Sonar or Docker.
 
+The Step 8 helper tests also use temporary directories only; they validate
+configuration bounds, child-state isolation, winner ranking, delta promotion,
+and concurrent-change protection.
+
 ## Intentionally deferred
 
-Step 7 does not implement conversational plan revision, parallel candidates, or
-a rendered transition timeline. Those enhancements belong after the required
-challenge steps or in their later designated steps.
+Step 8 does not implement conversational plan revision or a rendered transition
+timeline. Timeline rendering belongs to Step 9; conversational plan revision is
+an optional enhancement after the required challenge steps.

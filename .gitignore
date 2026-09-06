@@ -30,6 +30,14 @@ ENV/
 /agentic_graph/runs/*/.dispatcher.lock
 /agentic_graph/runs/*/.*.tmp
 /agentic_graph/runs/*/.sonar-review-*/
+/agentic_graph/runs/*/baseline/
+/agentic_graph/runs/*/candidates/*/workspace/
+/agentic_graph/runs/*/candidates/*/candidate-dispatch.*.log
+/agentic_graph/runs/*/candidates/.sonar-review.lock
+/agentic_graph/runs/*/candidates/*/.dispatcher.lock
+/agentic_graph/runs/*/candidates/*/.*.tmp
+/agentic_graph/runs/*/candidates/*/.sonar-review-*/
+*.promotion.tmp
 
 # Local secrets
 .env
