@@ -47,7 +47,7 @@ def read_state(path: Path, expected_next_node: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise NodeError(f"Input state must contain a JSON object: {path}")
     if value.get("schema_version") != 2:
-        raise NodeError("Only schema_version 2 is supported by Step 3 nodes")
+        raise NodeError("Only schema_version 2 is supported by graph nodes")
     if not isinstance(value.get("run_id"), str) or not value["run_id"].strip():
         raise NodeError("Input state must contain a non-empty run_id")
     if not isinstance(value.get("task"), dict):
@@ -142,6 +142,11 @@ def output_content(state: dict[str, Any], node_name: str) -> str:
     if not isinstance(content, str) or not content.strip():
         raise NodeError(f"Input state has no usable content for {node_name!r}")
     return content
+
+
+def approved_plan_content(state: dict[str, Any]) -> str:
+    """Return the exact human-approved plan and reject unapproved execution."""
+    return output_content(state, "approval")
 
 
 def invoke_codex(fixture: Path, prompt: str, sandbox: str) -> str:

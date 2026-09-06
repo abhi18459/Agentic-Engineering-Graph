@@ -16,6 +16,7 @@ MANIFEST_SCHEMA_VERSION = 1
 ATTEMPT_STATUSES = {"running", "succeeded", "failed", "interrupted"}
 WORKFLOW_STATUSES = {
     "running",
+    "awaiting_approval",
     "interrupted",
     "failed",
     "succeeded",

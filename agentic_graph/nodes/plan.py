@@ -32,12 +32,13 @@ def main() -> int:
         updated = advance_state(
             state,
             current_node="plan",
-            next_node="code",
+            next_node="approval",
             output={
                 "content": plan,
                 "agent_cli": "codex exec",
                 "sandbox": "read-only",
             },
+            workflow_status="awaiting_approval",
         )
         write_state(args.output_state, updated, args.input_state)
     except NodeError as exc:

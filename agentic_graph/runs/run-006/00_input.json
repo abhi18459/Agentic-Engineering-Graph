@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "run_id": "run-006",
+  "parent_run_id": "run-005",
+  "scenario": "human_plan_approval",
+  "state_sequence": 0,
+  "task": {
+    "title": "Raise ValueError for non-numeric CSV plotting columns",
+    "description": "Reject selected CSV columns that cannot be plotted as numeric data while preserving the existing missing-column behavior.",
+    "requirements": [
+      "Preserve the current behavior when both requested columns exist and contain numeric data.",
+      "If x_col or y_col exists but is not numeric, raise ValueError before attempting to plot it.",
+      "The ValueError message must identify each selected non-numeric column exactly once.",
+      "Preserve the existing descriptive ValueError behavior for missing requested columns.",
+      "Add meaningful pytest coverage for one and two selected non-numeric columns.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "Numeric selected columns still return their values.",
+      "A selected non-numeric column raises ValueError containing its name.",
+      "Two selected non-numeric columns are both identified without duplication."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "plan",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {},
+  "test_attempts": [],
+  "fix_attempts": []
+}

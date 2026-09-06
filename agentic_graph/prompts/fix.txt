@@ -5,7 +5,7 @@ all earlier fix attempts in this run. Inspect that current working tree and buil
 on those changes. Do not reset, revert, check out, or otherwise restore an older
 baseline.
 
-Use the original task, persisted plan, previous code proposal, latest test
+Use the original task, human-approved plan, previous code proposal, latest test
 failure, and earlier fix records supplied below to diagnose the failure. Make the
 smallest source-code or test change that correctly satisfies the original task.
 Run no tests, linters, formatters, static analysis, or other validation commands;

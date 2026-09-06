@@ -11,6 +11,7 @@ from common import (
     GRAPH_ROOT,
     NodeError,
     advance_state,
+    approved_plan_content,
     invoke_codex,
     node_parser,
     output_content,
@@ -46,14 +47,14 @@ def main() -> int:
 
         fixture = resolve_fixture_path(state, args.input_state)
         instructions = read_prompt(args.prompt_file)
-        plan = output_content(state, "plan")
+        plan = approved_plan_content(state)
         previous_code = output_content(state, "code")
         failure = latest_repairable_failure(state)
         prior_fixes = json.dumps(state["fix_attempts"], indent=2, ensure_ascii=False)
         prompt = (
             f"{instructions}\n\n"
             f"## Original task\n\n{task_as_json(state)}\n\n"
-            f"## Persisted plan\n\n{plan}\n\n"
+            f"## Human-approved plan\n\n{plan}\n\n"
             f"## Previous code proposal\n\n{previous_code}\n\n"
             f"## Latest failing test result\n\n"
             f"{json.dumps(failure, indent=2, ensure_ascii=False)}\n\n"

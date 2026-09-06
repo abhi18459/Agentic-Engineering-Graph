@@ -9,6 +9,7 @@ from common import (
     GRAPH_ROOT,
     NodeError,
     advance_state,
+    approved_plan_content,
     invoke_codex,
     node_parser,
     output_content,
@@ -28,12 +29,12 @@ def main() -> int:
         state = read_state(args.input_state, "write")
         fixture = resolve_fixture_path(state, args.input_state)
         instructions = read_prompt(args.prompt_file)
-        plan = output_content(state, "plan")
+        plan = approved_plan_content(state)
         code_attempt = output_content(state, "code")
         prompt = (
             f"{instructions}\n\n"
             f"## Task\n\n{task_as_json(state)}\n\n"
-            f"## Persisted plan\n\n{plan}\n\n"
+            f"## Human-approved plan\n\n{plan}\n\n"
             f"## Persisted implementation proposal\n\n{code_attempt}\n"
         )
         write_result = invoke_codex(fixture, prompt, "workspace-write")

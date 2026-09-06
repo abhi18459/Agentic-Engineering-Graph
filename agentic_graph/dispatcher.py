@@ -14,6 +14,17 @@ from pathlib import Path
 from types import FrameType
 from typing import Any
 
+from approval import (
+    APPROVAL_FILENAME,
+    APPROVAL_NODE,
+    REVIEW_FILENAME,
+    ApprovalError,
+    approved_state,
+    ensure_review_file,
+    load_valid_approval,
+    plan_output,
+    write_json_exclusive,
+)
 from run_manifest import (
     MANIFEST_FILENAME,
     ManifestError,
@@ -28,8 +39,9 @@ from run_manifest import (
 )
 
 GRAPH_ROOT = Path(__file__).resolve().parent
-DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-005"
+DEFAULT_RUN_DIR = GRAPH_ROOT / "runs" / "run-006"
 TERMINAL_NODES = {"END", "give_up"}
+CONTROL_NODES = {APPROVAL_NODE}
 
 # Only trusted node labels can select an executable. State files never supply paths.
 NODES: dict[str, Path] = {
@@ -39,6 +51,7 @@ NODES: dict[str, Path] = {
     "test": GRAPH_ROOT / "nodes" / "test.py",
     "fix": GRAPH_ROOT / "nodes" / "fix.py",
 }
+ROUTABLE_NODES = set(NODES) | CONTROL_NODES | TERMINAL_NODES
 
 
 class DispatchError(RuntimeError):
@@ -112,7 +125,7 @@ def validate_transition(
     next_node = current.get("next_node")
     if not isinstance(next_node, str):
         raise DispatchError(f"{output_path} must contain a string next_node")
-    if next_node not in NODES and next_node not in TERMINAL_NODES:
+    if next_node not in ROUTABLE_NODES:
         raise DispatchError(
             f"Refusing unknown next_node {next_node!r} in {output_path}"
         )
@@ -123,6 +136,8 @@ def validate_transition(
         expected_status = "succeeded"
     elif next_node == "give_up":
         expected_status = ("gave_up", "error")
+    elif next_node == APPROVAL_NODE:
+        expected_status = "awaiting_approval"
     else:
         expected_status = "running"
     if isinstance(expected_status, tuple):
@@ -192,7 +207,7 @@ def validate_checkpoint(
         raise DispatchError("Manifest next_node does not match its checkpoint")
 
     next_node = checkpoint["next_node"]
-    if next_node not in NODES and next_node not in TERMINAL_NODES:
+    if next_node not in ROUTABLE_NODES:
         raise DispatchError(f"Manifest checkpoint names unknown node {next_node!r}")
     return input_path, input_state, next_node
 
@@ -233,6 +248,17 @@ def initialize_run(
         raise DispatchError(
             "Cannot create a manifest for a run that already has output snapshots: "
             + ", ".join(path.name for path in existing_snapshots)
+        )
+
+    unexpected_control_files = [
+        name
+        for name in (REVIEW_FILENAME, APPROVAL_FILENAME)
+        if (run_dir / name).exists()
+    ]
+    if unexpected_control_files:
+        raise DispatchError(
+            "Cannot create a manifest for a pristine run with existing control "
+            "files: " + ", ".join(unexpected_control_files)
         )
 
     manifest = create_manifest(
@@ -389,6 +415,90 @@ def recover_interrupted_attempt(
     return manifest, input_path, input_state, current_node
 
 
+def process_approval_gate(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    run_dir: Path,
+    input_path: Path,
+    input_state: dict[str, Any],
+) -> tuple[dict[str, Any], Path, dict[str, Any], str] | None:
+    """Pause for review or commit the exact approved plan as a checkpoint."""
+    try:
+        plan_output(input_state)
+        review_path = ensure_review_file(run_dir, input_state)
+        approval_result = load_valid_approval(run_dir, manifest["run_id"])
+    except ApprovalError as exc:
+        raise DispatchError(str(exc)) from exc
+
+    if approval_result is None:
+        changed = (
+            manifest["workflow_status"] != "awaiting_approval"
+            or manifest["current_node"] != APPROVAL_NODE
+        )
+        manifest["workflow_status"] = "awaiting_approval"
+        manifest["current_node"] = APPROVAL_NODE
+        if changed:
+            write_manifest(manifest_path, manifest)
+        print(f"Plan is ready for human review: {review_path}", flush=True)
+        print(
+            "Edit it as many times as needed, then approve it with:\n"
+            f"  {sys.executable} {GRAPH_ROOT / 'approve_plan.py'} "
+            f"--run-dir {run_dir}",
+            flush=True,
+        )
+        print("The workflow is paused; no code node has run.", flush=True)
+        return None
+
+    approval, approved_plan = approval_result
+    sequence = input_state.get("state_sequence")
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+        raise DispatchError(f"{input_path} has an invalid state_sequence")
+    output_path = run_dir / snapshot_name(sequence + 1, APPROVAL_NODE)
+    if output_path.exists():
+        raise DispatchError(
+            f"Refusing to overwrite unhandled approval snapshot: {output_path}"
+        )
+
+    attempt_id = start_attempt(
+        manifest,
+        node=APPROVAL_NODE,
+        input_state=input_path.name,
+        output_state=output_path.name,
+    )
+    write_manifest(manifest_path, manifest)
+    try:
+        output_state = approved_state(input_state, approval, approved_plan)
+        write_json_exclusive(output_path, output_state)
+        next_node = validate_transition(
+            input_state, output_state, APPROVAL_NODE, output_path
+        )
+    except (ApprovalError, DispatchError) as exc:
+        finish_unsuccessful_attempt(
+            manifest,
+            attempt_id=attempt_id,
+            status="failed",
+            error=str(exc),
+            exit_code=None,
+        )
+        write_manifest(manifest_path, manifest)
+        if isinstance(exc, DispatchError):
+            raise
+        raise DispatchError(str(exc)) from exc
+
+    complete_attempt(
+        manifest,
+        attempt_id=attempt_id,
+        output_state=output_path.name,
+        state_sequence=output_state["state_sequence"],
+        next_node=next_node,
+        workflow_status=output_state["workflow_status"],
+        exit_code=0,
+    )
+    write_manifest(manifest_path, manifest)
+    print(f"Recorded human-approved plan in {output_path}", flush=True)
+    return manifest, output_path, output_state, next_node
+
+
 def stop_process_group(process: subprocess.Popen[Any]) -> None:
     """Terminate an active node and descendants started in its process group."""
     if process.poll() is not None:
@@ -491,6 +601,19 @@ def dispatch_locked(
                 f"{input_path} points to {input_state.get('next_node')!r}, "
                 f"not requested node {current_node!r}"
             )
+
+        if current_node == APPROVAL_NODE:
+            approval_transition = process_approval_gate(
+                manifest_path,
+                manifest,
+                run_dir,
+                input_path,
+                input_state,
+            )
+            if approval_transition is None:
+                return 0
+            manifest, input_path, input_state, current_node = approval_transition
+            continue
 
         sequence = input_state.get("state_sequence")
         if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
