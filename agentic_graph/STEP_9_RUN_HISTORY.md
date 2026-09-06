@@ -110,11 +110,10 @@ python3 -m unittest discover -s agentic_graph/tests -v
 
 ## Manual acceptance check
 
-The prepared `run-012` starts at `test` with direct plotting deliberately
-validating only `x_data` for non-finite values. Existing `y_data` tests therefore
-fail and route to `fix`, which has seeded approved context describing the narrow
-repair. Commit that pre-run state, make the SonarQube MCP environment available,
-and run:
+The committed `run-012` evidence started at `test` with direct plotting
+deliberately validating only `x_data` for non-finite values. Existing `y_data`
+tests failed and routed to `fix`, which used seeded approved context to make the
+narrow repair. The recorded invocation was:
 
 ```bash
 python3 agentic_graph/dispatcher.py \
@@ -122,8 +121,8 @@ python3 agentic_graph/dispatcher.py \
   --start test
 ```
 
-The expected path is `test -> fix -> test -> review -> END`. After it completes,
-persist the timeline:
+The recorded path is `test -> fix -> test -> review -> END`. After it completed,
+the timeline was persisted with:
 
 ```bash
 python3 agentic_graph/render_timeline.py \
@@ -131,7 +130,9 @@ python3 agentic_graph/render_timeline.py \
   --output agentic_graph/runs/run-012/timeline.md
 ```
 
-Verify:
+The final MCP-backed review passed with three indexed files and zero findings.
+All four completed manifest attempts have non-negative native durations, and
+the saved timeline satisfies the following checks:
 
 - All attempts appear in `attempt_id` order.
 - Repeated node names appear as separate rows.
@@ -139,6 +140,9 @@ Verify:
 - Failed or interrupted attempts are retained.
 - The last transition and displayed workflow status agree with the manifest.
 - Rendering without `--output` does not create or modify run files.
+
+Use a fresh run directory to repeat the acceptance check; do not reuse the
+terminal run-012 evidence.
 
 This is the final required challenge step. Conversational plan revision, token
 and cost accounting, pull-request creation, and diagram rendering remain

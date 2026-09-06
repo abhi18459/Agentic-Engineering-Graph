@@ -1,0 +1,72 @@
+{
+  "manifest_schema_version": 1,
+  "run_id": "run-012",
+  "created_at": "2026-09-06T14:57:52.938957+00:00",
+  "updated_at": "2026-09-06T15:01:47.162759+00:00",
+  "workflow_status": "succeeded",
+  "current_node": "END",
+  "checkpoint": {
+    "state_file": "04_review.json",
+    "state_sequence": 4,
+    "next_node": "END"
+  },
+  "attempts": [
+    {
+      "attempt_id": 1,
+      "node": "test",
+      "input_state": "00_input.json",
+      "output_state": "01_test.json",
+      "started_at": "2026-09-06T14:57:52.939315+00:00",
+      "completed_at": "2026-09-06T14:57:54.502781+00:00",
+      "duration_seconds": 1.56345,
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "fix",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 2,
+      "node": "fix",
+      "input_state": "01_test.json",
+      "output_state": "02_fix.json",
+      "started_at": "2026-09-06T14:57:54.503391+00:00",
+      "completed_at": "2026-09-06T14:58:22.285722+00:00",
+      "duration_seconds": 27.78227,
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "test",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 3,
+      "node": "test",
+      "input_state": "02_fix.json",
+      "output_state": "03_test.json",
+      "started_at": "2026-09-06T14:58:22.286805+00:00",
+      "completed_at": "2026-09-06T14:58:23.527927+00:00",
+      "duration_seconds": 1.24112,
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "review",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 4,
+      "node": "review",
+      "input_state": "03_test.json",
+      "output_state": "04_review.json",
+      "started_at": "2026-09-06T14:58:23.528412+00:00",
+      "completed_at": "2026-09-06T15:01:47.162711+00:00",
+      "duration_seconds": 203.633926,
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "END",
+      "error": null,
+      "recovered": false
+    }
+  ],
+  "recoveries": []
+}

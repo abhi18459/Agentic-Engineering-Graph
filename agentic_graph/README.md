@@ -76,7 +76,7 @@ agentic_graph/
     ├── run-009/          # Completed Step 6 repeatability evidence
     ├── run-010/          # Completed Step 7 MCP review validation
     ├── run-011/          # Completed Step 8 parallel-candidate validation
-    └── run-012/          # Prepared Step 9 timed fix-loop validation
+    └── run-012/          # Completed Step 9 timed fix-loop validation
 ```
 
 Nodes remain independently executable. They read one state snapshot, do their
@@ -530,10 +530,11 @@ manifest exists, its checkpoint controls resume and `--start` is ignored.
 
 ## Run the Step 9 timeline validation
 
-`run-012` starts at `test` with one narrow, genuine regression: direct plotting
-currently checks `x_data`, but not `y_data`, for non-finite values. Existing
-regression tests expose the fault. The seeded approved plan and code context let
-`fix` restore the missing `y_data` validation without weakening tests.
+`run-012` records the completed validation. It started at `test` with one
+narrow, genuine regression: direct plotting checked `x_data`, but not `y_data`,
+for non-finite values. Existing regression tests exposed the fault. The seeded
+approved plan and code context let `fix` restore the missing `y_data` validation
+without weakening tests.
 
 Docker Desktop and Codex CLI authentication must be ready. In the terminal that
 will run the dispatcher, provide scanner and MCP credentials without printing
@@ -544,7 +545,7 @@ export SONARQUBE_TOKEN="$SONAR_TOKEN"
 export SONARQUBE_ORG="abhi18459"
 ```
 
-Commit the prepared failure state before running it. Then execute:
+The committed run was executed with:
 
 ```bash
 python3 agentic_graph/dispatcher.py \
@@ -552,7 +553,7 @@ python3 agentic_graph/dispatcher.py \
   --start test
 ```
 
-The expected route is:
+The recorded route is:
 
 ```text
 00_input.json
@@ -563,7 +564,7 @@ The expected route is:
 -> END
 ```
 
-After the workflow reaches `END`, save its timeline evidence:
+After the workflow reached `END`, its timeline evidence was saved with:
 
 ```bash
 python3 agentic_graph/render_timeline.py \
@@ -571,9 +572,10 @@ python3 agentic_graph/render_timeline.py \
   --output agentic_graph/runs/run-012/timeline.md
 ```
 
-The manifest must contain a non-negative `duration_seconds` for all four
-attempts. The timeline must preserve the exact route above and show plausible
-durations. Rendering without `--output` remains read-only.
+The manifest contains a non-negative `duration_seconds` for all four attempts,
+and the timeline preserves the exact route above with plausible durations.
+Rendering without `--output` remains read-only. Use a fresh run directory to
+repeat this validation; completed run-012 is immutable historical evidence.
 
 ## Additional runs
 
