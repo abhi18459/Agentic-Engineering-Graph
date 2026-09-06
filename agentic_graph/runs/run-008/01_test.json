@@ -3,7 +3,7 @@
   "run_id": "run-008",
   "parent_run_id": "run-007",
   "scenario": "sonar_quality_gate_failure_and_fix",
-  "state_sequence": 0,
+  "state_sequence": 1,
   "task": {
     "title": "Correct mismatched plot-data length validation",
     "description": "Repair the deliberately incorrect same-length comparison in create_plot and satisfy both pytest and the deterministic SonarQube quality gate.",
@@ -23,9 +23,9 @@
     ]
   },
   "fixture_path": "../../../fixture",
-  "current_node": "input",
-  "next_node": "test",
-  "status": "ready",
+  "current_node": "test",
+  "next_node": "review",
+  "status": "completed",
   "workflow_status": "running",
   "iteration": 0,
   "max_iterations": 3,
@@ -68,9 +68,46 @@
     },
     "code": {
       "content": "The starting fixture deliberately checks len(x_data) against len(x_data), so unequal y_data is never rejected. Change the right-hand expression to len(y_data), retain the descriptive ValueError, and add a mismatched-length regression test."
+    },
+    "test": {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": ".............                                                            [100%]\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      45      2    96%   63, 98\n---------------------------------------------------------\nTOTAL                          46      2    96%\nCoverage XML written to file coverage.xml\n13 passed in 1.23s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
     }
   },
-  "test_attempts": [],
+  "test_attempts": [
+    {
+      "result": "passed",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "--cov=starter_repo",
+        "--cov-report=term-missing",
+        "--cov-report=xml:coverage.xml"
+      ],
+      "stdout": ".............                                                            [100%]\n================================ tests coverage ================================\n_______________ coverage: platform darwin, python 3.12.7-final-0 _______________\n\nName                        Stmts   Miss  Cover   Missing\n---------------------------------------------------------\nstarter_repo/__init__.py        1      0   100%\nstarter_repo/plot_data.py      45      2    96%   63, 98\n---------------------------------------------------------\nTOTAL                          46      2    96%\nCoverage XML written to file coverage.xml\n13 passed in 1.23s\n",
+      "stderr": "",
+      "attempt": 1,
+      "fix_iteration": 0
+    }
+  ],
   "review_attempts": [],
   "fix_attempts": []
 }

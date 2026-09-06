@@ -29,7 +29,10 @@
       ".venv/bin/python",
       "-m",
       "pytest",
-      "-q"
+      "-q",
+      "--cov=starter_repo",
+      "--cov-report=term-missing",
+      "--cov-report=xml:coverage.xml"
     ],
     "timeout_seconds": 300,
     "repairable_exit_codes": [

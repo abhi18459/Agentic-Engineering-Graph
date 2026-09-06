@@ -1,9 +1,10 @@
+import sys
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from starter_repo.plot_data import create_plot, read_csv_data
+from starter_repo.plot_data import create_plot, main, read_csv_data
 
 
 @pytest.fixture
@@ -125,3 +126,34 @@ def test_create_plot() -> None:
     assert ax.get_xlabel() == "X"
     assert ax.get_ylabel() == "Y"
     assert ax.get_title() == "Test Plot"
+
+
+def test_create_plot_rejects_mismatched_data_lengths() -> None:
+    """Test that data sequences with different lengths are rejected."""
+    with pytest.raises(ValueError, match="^x_data and y_data must have the same length$"):
+        create_plot([1.0, 2.0], [3.0], "X", "Y", "Test Plot")
+
+
+def test_main_writes_plot_file(
+    sample_csv: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test the existing command-line path and generated output file."""
+    output_path = tmp_path / "command_line_plot.png"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "plot_data.py",
+            str(sample_csv),
+            "x",
+            "y",
+            "--output",
+            str(output_path),
+            "--title",
+            "CLI Plot",
+        ],
+    )
+
+    main()
+
+    assert output_path.is_file()

@@ -247,13 +247,19 @@ recovery behavior.
 4. Confirm `sonar-scanner` is installed and the Sonar project in
    `../fixture/sonar-project.properties` is accessible.
 5. Make `SONAR_TOKEN` available in the shell without printing or committing it.
-6. Confirm the active quality gate fails for an unreviewed hard-coded credential.
+6. Confirm the active quality profile enables the reliability rule for identical
+   expressions on both sides of a binary comparison.
 7. Commit the pre-run state if you want an auditable checkpoint.
 
-The fixture currently contains the intentionally insecure
-`PLOT_SERVICE_PASSWORD` constant used to drive the required failure path. It is
-not a real credential. `run-008` begins at `test` so the unchanged passing tests
-lead into a failing Sonar review, after which `fix` should remove the constant.
+The fixture currently contains an intentionally incorrect comparison of
+`len(x_data)` with itself inside `create_plot()`. Existing tests still pass, but
+Sonar should report the duplicated comparison as a reliability issue. `run-008`
+begins at `test`, then the failed review asks `fix` to compare `x_data` with
+`y_data` and add regression coverage for the error branch.
+
+The test command uses `pytest-cov` to create `fixture/coverage.xml`, and
+`sonar.python.coverage.reportPaths=coverage.xml` imports it. The report and
+coverage database are ignored by Git; the quality gate is not bypassed.
 
 ## Verify repeatability before the repair
 
@@ -263,7 +269,7 @@ against identical input and source:
 ```bash
 python3 agentic_graph/verify_review_repeatability.py \
   --input-state agentic_graph/runs/run-009/00_input.json \
-  --output agentic_graph/runs/run-009/repeatability_result.json
+  --output agentic_graph/runs/run-009/repeatability_result_v2.json
 ```
 
 The command exits `0` only when both `deterministic_result` objects are exactly
@@ -295,7 +301,7 @@ The expected route is:
 00_input.json
 -> 01_test.json       (passed)
 -> 02_review.json     (failed gate with Sonar findings)
--> 03_fix.json        (removes the hard-coded credential)
+-> 03_fix.json        (corrects the comparison and adds regression coverage)
 -> 04_test.json       (passed)
 -> 05_review.json     (passed gate)
 -> END

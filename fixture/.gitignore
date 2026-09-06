@@ -35,3 +35,6 @@ ENV/
 *.png
 *.csv
 !data/sample.csv
+coverage.xml
+.coverage
+htmlcov/

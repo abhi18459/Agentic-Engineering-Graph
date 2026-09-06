@@ -1,0 +1,149 @@
+{
+  "comparison_schema_version": 1,
+  "input_state": "/Users/abhishekghosh/agentic-engineering/agentic_graph/runs/run-009/00_input.json",
+  "matches": true,
+  "first": {
+    "decision": "failed",
+    "quality_gate_status": "ERROR",
+    "conditions": [
+      {
+        "metric": "new_coverage",
+        "comparator": "LT",
+        "error_threshold": "80",
+        "actual_value": "95.7",
+        "status": "OK"
+      },
+      {
+        "metric": "new_duplicated_lines_density",
+        "comparator": "GT",
+        "error_threshold": "3",
+        "actual_value": "0.0",
+        "status": "OK"
+      },
+      {
+        "metric": "new_maintainability_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "1",
+        "status": "OK"
+      },
+      {
+        "metric": "new_reliability_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "3",
+        "status": "ERROR"
+      },
+      {
+        "metric": "new_security_hotspots_reviewed",
+        "comparator": "LT",
+        "error_threshold": "100",
+        "actual_value": "100.0",
+        "status": "OK"
+      },
+      {
+        "metric": "new_security_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "1",
+        "status": "OK"
+      }
+    ],
+    "findings": [
+      {
+        "kind": "issue",
+        "rule": "pythonbugs:S2583",
+        "type": "BUG",
+        "severity": "MAJOR",
+        "impacts": [
+          {
+            "software_quality": "RELIABILITY",
+            "severity": "MEDIUM"
+          }
+        ],
+        "file": "starter_repo/plot_data.py",
+        "line": 62,
+        "message": "Fix this condition that always evaluates to false.",
+        "status": "OPEN",
+        "tags": [
+          "cwe",
+          "pitfall",
+          "suspicious",
+          "unused"
+        ]
+      }
+    ]
+  },
+  "second": {
+    "decision": "failed",
+    "quality_gate_status": "ERROR",
+    "conditions": [
+      {
+        "metric": "new_coverage",
+        "comparator": "LT",
+        "error_threshold": "80",
+        "actual_value": "95.7",
+        "status": "OK"
+      },
+      {
+        "metric": "new_duplicated_lines_density",
+        "comparator": "GT",
+        "error_threshold": "3",
+        "actual_value": "0.0",
+        "status": "OK"
+      },
+      {
+        "metric": "new_maintainability_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "1",
+        "status": "OK"
+      },
+      {
+        "metric": "new_reliability_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "3",
+        "status": "ERROR"
+      },
+      {
+        "metric": "new_security_hotspots_reviewed",
+        "comparator": "LT",
+        "error_threshold": "100",
+        "actual_value": "100.0",
+        "status": "OK"
+      },
+      {
+        "metric": "new_security_rating",
+        "comparator": "GT",
+        "error_threshold": "1",
+        "actual_value": "1",
+        "status": "OK"
+      }
+    ],
+    "findings": [
+      {
+        "kind": "issue",
+        "rule": "pythonbugs:S2583",
+        "type": "BUG",
+        "severity": "MAJOR",
+        "impacts": [
+          {
+            "software_quality": "RELIABILITY",
+            "severity": "MEDIUM"
+          }
+        ],
+        "file": "starter_repo/plot_data.py",
+        "line": 62,
+        "message": "Fix this condition that always evaluates to false.",
+        "status": "OPEN",
+        "tags": [
+          "cwe",
+          "pitfall",
+          "suspicious",
+          "unused"
+        ]
+      }
+    ]
+  }
+}
