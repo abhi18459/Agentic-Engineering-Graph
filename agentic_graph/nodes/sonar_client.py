@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,24 @@ from urllib.request import Request, urlopen
 
 class SonarError(RuntimeError):
     """Raised when a Sonar analysis result cannot be obtained safely."""
+
+
+INDEXED_FILES_PATTERN = re.compile(r"\b(\d+)\s+files?\s+indexed\b")
+
+
+def indexed_file_count(scanner_output: str) -> int:
+    """Return the reported indexed-file count, failing closed without evidence."""
+    counts = [
+        int(match.group(1)) for match in INDEXED_FILES_PATTERN.finditer(scanner_output)
+    ]
+    if not counts:
+        raise SonarError(
+            "SonarScanner output did not report how many files were indexed"
+        )
+    count = max(counts)
+    if count == 0:
+        raise SonarError("SonarScanner indexed zero files")
+    return count
 
 
 def captured_text(value: str | bytes | None) -> str:
@@ -301,6 +320,7 @@ def execute_sonar_scan(
 
     try:
         metadata = parse_report_task(metadata_path)
+        indexed_files = indexed_file_count(stdout)
     except SonarError as exc:
         return error_attempt(
             command=command,
@@ -315,6 +335,7 @@ def execute_sonar_scan(
         "stdout": stdout,
         "stderr": stderr,
         "metadata": metadata,
+        "indexed_file_count": indexed_files,
     }
 
 
@@ -438,4 +459,5 @@ def execute_sonar_review(
         "ce_task_id": metadata["ceTaskId"],
         "dashboard_url": metadata.get("dashboardUrl", ""),
         "project_key": project_key,
+        "indexed_file_count": scan["indexed_file_count"],
     }

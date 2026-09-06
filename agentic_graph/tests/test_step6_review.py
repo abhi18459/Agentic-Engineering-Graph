@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 GRAPH_ROOT = Path(__file__).resolve().parents[1]
 NODES_ROOT = GRAPH_ROOT / "nodes"
@@ -15,7 +18,14 @@ import dispatcher
 import fix
 import review
 from common import NodeError
-from sonar_client import normalize_conditions, normalize_hotspot, normalize_issue
+from sonar_client import (
+    SonarError,
+    execute_sonar_scan,
+    indexed_file_count,
+    normalize_conditions,
+    normalize_hotspot,
+    normalize_issue,
+)
 
 
 def state(*, iteration: int = 0, maximum: int = 3) -> dict:
@@ -81,6 +91,47 @@ class ReviewRoutingTest(unittest.TestCase):
 
 
 class ReviewNormalizationTest(unittest.TestCase):
+    def test_scanner_requires_a_positive_indexed_file_count(self) -> None:
+        self.assertEqual(
+            indexed_file_count("12:00:00 INFO  3 files indexed (done) | time=1ms"),
+            3,
+        )
+        with self.assertRaisesRegex(SonarError, "indexed zero files"):
+            indexed_file_count("12:00:00 INFO  0 files indexed (done) | time=1ms")
+        with self.assertRaisesRegex(SonarError, "did not report"):
+            indexed_file_count("12:00:00 INFO  EXECUTION SUCCESS")
+
+    def test_zero_file_scan_returns_a_scanner_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            metadata = root / "report-task.txt"
+            metadata.write_text(
+                "serverUrl=https://sonar.example\n"
+                "ceTaskUrl=https://sonar.example/api/ce/task?id=one\n"
+                "ceTaskId=one\n"
+                "projectKey=fixture\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.CompletedProcess(
+                args=["sonar-scanner"],
+                returncode=0,
+                stdout="12:00:00 INFO  0 files indexed (done) | time=1ms",
+                stderr="",
+            )
+            with patch("sonar_client.subprocess.run", return_value=completed):
+                result = execute_sonar_scan(
+                    fixture=root,
+                    base_command=["sonar-scanner"],
+                    quality_gate_timeout=300,
+                    process_timeout=360,
+                    environment={},
+                    token="token",
+                    metadata_path=metadata,
+                )
+
+        self.assertEqual(result["result"], "scanner_error")
+        self.assertEqual(result["error"], "SonarScanner indexed zero files")
+
     def test_volatile_issue_fields_do_not_affect_normalized_finding(self) -> None:
         shared = {
             "rule": "python:S2068",

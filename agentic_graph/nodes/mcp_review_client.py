@@ -373,6 +373,7 @@ def scan_fields(scan: dict[str, Any]) -> dict[str, Any]:
         "ce_task_id": metadata["ceTaskId"],
         "dashboard_url": metadata.get("dashboardUrl", ""),
         "project_key": metadata["projectKey"],
+        "indexed_file_count": scan["indexed_file_count"],
     }
 
 

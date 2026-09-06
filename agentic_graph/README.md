@@ -432,6 +432,12 @@ entire scanner-and-MCP-query cycle, ensuring that another candidate cannot
 replace the project's current analysis between scanning and collecting its
 result. Code generation, writing, testing, and repairs remain concurrent.
 
+Candidate workspaces are intentionally ignored by the parent Git repository.
+Their scanner command therefore forces `sonar.scm.exclusions.disabled=true` so
+Sonar analyzes the copied sources despite the parent ignore rule. Every review
+also fails closed unless SonarScanner reports that at least one file was indexed;
+a passing quality gate for an empty analysis is never accepted.
+
 After all child dispatchers finish, `join` reloads their manifests and terminal
 checkpoints rather than trusting the fan-out summary alone. It excludes any
 candidate without a passing latest test and `OK` Sonar quality gate, then ranks

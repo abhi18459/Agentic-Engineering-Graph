@@ -21,6 +21,7 @@ MIN_CANDIDATES = 2
 MAX_CANDIDATES = 8
 DEFAULT_CANDIDATE_WAIT_TIMEOUT = 3600
 RANKING_RULE = "fewest_sonar_findings"
+SONAR_INCLUDE_IGNORED_PROPERTY = "-Dsonar.scm.exclusions.disabled=true"
 IGNORED_NAMES = {
     ".coverage",
     ".DS_Store",
@@ -217,6 +218,23 @@ def _normalize_command_paths(config: dict[str, Any], source_fixture: Path) -> No
     config["command"] = normalized
 
 
+def _include_gitignored_files_in_sonar_scan(config: dict[str, Any]) -> None:
+    """Force a candidate scan to include its intentionally ignored workspace."""
+    command = config.get("command")
+    if not isinstance(command, list):
+        return
+    property_prefix = "-Dsonar.scm.exclusions.disabled="
+    config["command"] = [
+        argument
+        for argument in command
+        if not (
+            isinstance(argument, str)
+            and argument.lower().startswith(property_prefix.lower())
+        )
+    ]
+    config["command"].append(SONAR_INCLUDE_IGNORED_PROPERTY)
+
+
 def build_candidate_state(
     parent_state: dict[str, Any],
     *,
@@ -273,6 +291,7 @@ def build_candidate_state(
     if not isinstance(review_config, dict):
         raise ParallelCandidateError("Candidate review_config must be an object")
     _normalize_command_paths(review_config, source_fixture)
+    _include_gitignored_files_in_sonar_scan(review_config)
     review_config["serialization_lock"] = "../.sonar-review.lock"
     return child
 

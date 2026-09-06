@@ -17,6 +17,7 @@ import review
 from common import NodeError
 from parallel_candidates import (
     MAX_CANDIDATES,
+    SONAR_INCLUDE_IGNORED_PROPERTY,
     ParallelCandidateError,
     build_candidate_state,
     candidate_result,
@@ -120,10 +121,34 @@ class ParallelConfigurationTest(unittest.TestCase):
             child["review_config"]["serialization_lock"],
             "../.sonar-review.lock",
         )
+        self.assertIn(
+            SONAR_INCLUDE_IGNORED_PROPERTY,
+            child["review_config"]["command"],
+        )
         self.assertNotIn("parallel_config", child)
         self.assertEqual(child["test_attempts"], [])
         self.assertEqual(child["review_attempts"], [])
         self.assertEqual(child["fix_attempts"], [])
+
+    def test_candidate_sonar_setting_replaces_a_conflicting_parent_value(self) -> None:
+        parent = parent_state()
+        parent["review_config"]["command"].append(
+            "-Dsonar.scm.exclusions.disabled=false"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            child = build_candidate_state(
+                parent,
+                name="candidate-01",
+                source_fixture=Path(temporary),
+                override={},
+            )
+
+        sonar_arguments = [
+            argument
+            for argument in child["review_config"]["command"]
+            if argument.lower().startswith("-dsonar.scm.exclusions.disabled=")
+        ]
+        self.assertEqual(sonar_arguments, [SONAR_INCLUDE_IGNORED_PROPERTY])
 
     def test_candidate_review_lock_is_confined_to_candidates_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
