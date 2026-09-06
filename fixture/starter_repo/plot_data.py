@@ -5,6 +5,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 
 
 def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float], list[float]]:
@@ -26,6 +27,14 @@ def read_csv_data(file_path: Path, x_col: str, y_col: str) -> tuple[list[float],
 
     if missing_columns:
         raise ValueError(f"CSV is missing required column(s): {', '.join(missing_columns)}")
+
+    non_numeric_columns: list[str] = []
+    for column in (x_col, y_col):
+        if not is_numeric_dtype(df[column]) and column not in non_numeric_columns:
+            non_numeric_columns.append(column)
+
+    if non_numeric_columns:
+        raise ValueError(f"CSV column(s) must be numeric: {', '.join(non_numeric_columns)}")
 
     return df[x_col].tolist(), df[y_col].tolist()
 

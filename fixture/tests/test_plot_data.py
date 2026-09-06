@@ -15,11 +15,48 @@ def sample_csv(tmp_path: Path) -> Path:
     return file_path
 
 
+@pytest.fixture
+def non_numeric_csv(tmp_path: Path) -> Path:
+    """Create a CSV with numeric and non-numeric columns."""
+    df = pd.DataFrame({"category": ["a", "b"], "label": ["first", "second"], "value": [1, 2]})
+    file_path = tmp_path / "non_numeric.csv"
+    df.to_csv(file_path, index=False)
+    return file_path
+
+
 def test_read_csv_data(sample_csv: Path) -> None:
     """Test reading data from CSV file."""
     x_data, y_data = read_csv_data(sample_csv, "x", "y")
     assert x_data == [1.0, 2.0, 3.0, 4.0, 5.0]
     assert y_data == [2.0, 4.0, 6.0, 8.0, 10.0]
+
+
+def test_read_csv_data_with_one_non_numeric_column(non_numeric_csv: Path) -> None:
+    """Test that one non-numeric selected column is identified once."""
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(non_numeric_csv, "value", "category")
+    message = str(exc_info.value)
+    assert message == "CSV column(s) must be numeric: category"
+    assert message.count("category") == 1
+
+
+def test_read_csv_data_with_two_non_numeric_columns(non_numeric_csv: Path) -> None:
+    """Test that two non-numeric selected columns are each identified once."""
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(non_numeric_csv, "category", "label")
+    message = str(exc_info.value)
+    assert message == "CSV column(s) must be numeric: category, label"
+    assert message.count("category") == 1
+    assert message.count("label") == 1
+
+
+def test_read_csv_data_same_non_numeric_column_for_both_axes(non_numeric_csv: Path) -> None:
+    """Test that a shared non-numeric column is identified without duplication."""
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(non_numeric_csv, "category", "category")
+    message = str(exc_info.value)
+    assert message == "CSV column(s) must be numeric: category"
+    assert message.count("category") == 1
 
 
 def test_read_csv_data_missing_x_column(sample_csv: Path) -> None:
@@ -50,6 +87,13 @@ def test_read_csv_data_same_missing_column_for_both_axes(sample_csv: Path) -> No
         read_csv_data(sample_csv, missing_column, missing_column)
     message = str(exc_info.value)
     assert message.count(missing_column) == 1
+
+
+def test_missing_column_error_precedes_non_numeric_validation(non_numeric_csv: Path) -> None:
+    """Test that missing-column validation retains precedence."""
+    with pytest.raises(ValueError) as exc_info:
+        read_csv_data(non_numeric_csv, "missing_x", "category")
+    assert str(exc_info.value) == "CSV is missing required column(s): missing_x"
 
 
 def test_create_plot() -> None:

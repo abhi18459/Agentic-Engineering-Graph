@@ -30,8 +30,7 @@ def approve(run_dir: Path) -> Path:
         manifest = load_manifest(run_dir / MANIFEST_FILENAME)
         if manifest["workflow_status"] != "awaiting_approval":
             raise ApprovalError(
-                "Run is not awaiting approval "
-                f"(status: {manifest['workflow_status']})"
+                f"Run is not awaiting approval (status: {manifest['workflow_status']})"
             )
         if manifest["current_node"] != APPROVAL_NODE:
             raise ApprovalError(

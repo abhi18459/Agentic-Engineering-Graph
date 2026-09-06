@@ -1,0 +1,8 @@
+{
+  "approval_schema_version": 1,
+  "run_id": "run-006",
+  "decision": "approved",
+  "approved_at": "2026-09-06T09:39:38+00:00",
+  "plan_file": "plan_review.md",
+  "plan_sha256": "a67521ca9b33e234bf1da314d0b11524eeccd7eb1a46e86026da2d2a0864a063"
+}

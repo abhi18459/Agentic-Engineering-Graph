@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "run_id": "run-007",
+  "parent_run_id": "run-006",
+  "scenario": "edited_plan_approval_validation",
+  "state_sequence": 0,
+  "task": {
+    "title": "Raise ValueError when a CSV has no data rows",
+    "description": "Reject a header-only CSV with a descriptive error while preserving existing missing-column and numeric-column validation.",
+    "requirements": [
+      "If all requested columns exist but the CSV contains no data rows, raise ValueError before numeric-type validation.",
+      "The ValueError message must clearly state that the CSV contains no data rows.",
+      "Keep missing-column validation first so an absent requested column still produces the existing missing-column error.",
+      "Preserve the existing behavior for populated numeric and non-numeric selected columns.",
+      "Add meaningful pytest coverage for a header-only CSV and for missing-column precedence on an empty CSV.",
+      "Do not change the command-line interface or unrelated plotting behavior."
+    ],
+    "acceptance_criteria": [
+      "Existing tests continue to pass.",
+      "A header-only CSV containing both requested columns raises ValueError mentioning that it has no data rows.",
+      "A header-only CSV missing a requested column still raises the existing missing-column ValueError.",
+      "Populated numeric columns continue to return their values unchanged."
+    ]
+  },
+  "fixture_path": "../../../fixture",
+  "current_node": "input",
+  "next_node": "plan",
+  "status": "ready",
+  "workflow_status": "running",
+  "iteration": 0,
+  "max_iterations": 3,
+  "test_config": {
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "pytest",
+      "-q"
+    ],
+    "timeout_seconds": 300,
+    "repairable_exit_codes": [
+      1
+    ],
+    "environment": {
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "en_US.UTF-8",
+      "MPLBACKEND": "Agg",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "outputs": {},
+  "test_attempts": [],
+  "fix_attempts": []
+}

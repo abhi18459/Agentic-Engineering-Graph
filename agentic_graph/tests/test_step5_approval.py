@@ -123,9 +123,7 @@ with open(args.output_state, "x", encoding="utf-8") as handle:
         (self.run_dir / REVIEW_FILENAME).write_text(edited_plan, encoding="utf-8")
 
         approval_path = approve_plan.approve(self.run_dir)
-        self.assertEqual(
-            approval_path, (self.run_dir / APPROVAL_FILENAME).resolve()
-        )
+        self.assertEqual(approval_path, (self.run_dir / APPROVAL_FILENAME).resolve())
         self.assertEqual(self.dispatch(), 0)
 
         approval_state = json.loads(

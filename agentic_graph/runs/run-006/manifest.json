@@ -1,0 +1,81 @@
+{
+  "manifest_schema_version": 1,
+  "run_id": "run-006",
+  "created_at": "2026-09-06T09:37:59+00:00",
+  "updated_at": "2026-09-06T09:42:05+00:00",
+  "workflow_status": "succeeded",
+  "current_node": "END",
+  "checkpoint": {
+    "state_file": "05_test.json",
+    "state_sequence": 5,
+    "next_node": "END"
+  },
+  "attempts": [
+    {
+      "attempt_id": 1,
+      "node": "plan",
+      "input_state": "00_input.json",
+      "output_state": "01_plan.json",
+      "started_at": "2026-09-06T09:37:59+00:00",
+      "completed_at": "2026-09-06T09:38:52+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "approval",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 2,
+      "node": "approval",
+      "input_state": "01_plan.json",
+      "output_state": "02_approval.json",
+      "started_at": "2026-09-06T09:39:55+00:00",
+      "completed_at": "2026-09-06T09:39:55+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "code",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 3,
+      "node": "code",
+      "input_state": "02_approval.json",
+      "output_state": "03_code.json",
+      "started_at": "2026-09-06T09:39:55+00:00",
+      "completed_at": "2026-09-06T09:41:24+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "write",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 4,
+      "node": "write",
+      "input_state": "03_code.json",
+      "output_state": "04_write.json",
+      "started_at": "2026-09-06T09:41:24+00:00",
+      "completed_at": "2026-09-06T09:42:04+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "test",
+      "error": null,
+      "recovered": false
+    },
+    {
+      "attempt_id": 5,
+      "node": "test",
+      "input_state": "04_write.json",
+      "output_state": "05_test.json",
+      "started_at": "2026-09-06T09:42:04+00:00",
+      "completed_at": "2026-09-06T09:42:05+00:00",
+      "status": "succeeded",
+      "exit_code": 0,
+      "next_node": "END",
+      "error": null,
+      "recovered": false
+    }
+  ],
+  "recoveries": []
+}
